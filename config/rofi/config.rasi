@@ -1,0 +1,25 @@
+/* Rofi behaviour. Theme lives in firewatch.rasi. */
+configuration {
+    modi:                "drun,run,window";
+    show-icons:          true;
+    icon-theme:          "Papirus-Dark";
+    drun-display-format: "{name}";
+    display-drun:        " Apps";
+    display-run:         " Run";
+    display-window:      " Windows";
+    display-kill:        " Kill";
+    window-format:       "{w}  {t}";
+    font:                "JetBrainsMono Nerd Font 11";
+
+    /* Snappy keynav */
+    kb-row-up:           "Up,Control+k";
+    kb-row-down:         "Down,Control+j";
+    kb-mode-next:        "Tab";
+    kb-mode-previous:    "ISO_Left_Tab";
+    kb-element-next:     "";
+    kb-element-prev:     "";
+    kb-remove-to-eol:    "";
+    kb-accept-entry:     "Return,KP_Enter";
+}
+
+@theme "firewatch"

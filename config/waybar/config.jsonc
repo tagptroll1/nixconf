@@ -1,0 +1,147 @@
+// -*- mode: jsonc -*-
+[
+  // ── Main bar: Corsair ultrawide (DP-1). Floating, not full width. ──
+  {
+    "name": "main",
+    "output": "DP-1",
+    "layer": "top",
+    "height": 30,
+    "spacing": 4,
+    // Side margins shrink the bar on the very wide display.
+    "margin-top": 0,
+    "margin-left": 540,
+    "margin-right": 540,
+    "modules-left": [
+      "dwl/tags",
+      "custom/media"
+    ],
+    "modules-center": [
+      "clock",
+      "custom/weather"
+    ],
+    "modules-right": [
+      "idle_inhibitor",
+      "cpu",
+      "memory",
+      "temperature",
+      "wireplumber",
+      "tray",
+      "custom/power"
+    ],
+    "custom/weather": {
+      "format": "{}",
+      "return-type": "json",
+      "interval": 600,
+      "exec": "bash $HOME/.config/waybar/scripts/weather.sh"
+    },
+    "idle_inhibitor": {
+      "format": "{icon}",
+      "format-icons": {
+        "activated": "",
+        "deactivated": ""
+      }
+    },
+    "tray": {
+      "spacing": 10
+    },
+    "clock": {
+      "timezone": "Europe/Oslo",
+      "tooltip-format": "<tt><small>{calendar}</small></tt>",
+      "format": "{:%H:%M  %d.%m.%Y}",
+      "format-alt": "{:%d.%m.%Y}"
+    },
+    "cpu": {
+      "format": "{usage}% 󰍛",
+      "tooltip": false
+    },
+    "memory": {
+      "format": "{}% "
+    },
+    "temperature": {
+      // k10temp (CPU Tctl) lives under this stable PCI device; the hwmonN
+      // index is not stable across boots, so list candidates and let waybar
+      // use the first that opens.
+      "hwmon-path": [
+        "/sys/devices/pci0000:00/0000:00:18.3/hwmon/hwmon0/temp1_input",
+        "/sys/devices/pci0000:00/0000:00:18.3/hwmon/hwmon1/temp1_input",
+        "/sys/devices/pci0000:00/0000:00:18.3/hwmon/hwmon2/temp1_input",
+        "/sys/devices/pci0000:00/0000:00:18.3/hwmon/hwmon3/temp1_input",
+        "/sys/devices/pci0000:00/0000:00:18.3/hwmon/hwmon4/temp1_input",
+        "/sys/devices/pci0000:00/0000:00:18.3/hwmon/hwmon5/temp1_input",
+        "/sys/devices/pci0000:00/0000:00:18.3/hwmon/hwmon6/temp1_input",
+        "/sys/devices/pci0000:00/0000:00:18.3/hwmon/hwmon7/temp1_input",
+        "/sys/devices/pci0000:00/0000:00:18.3/hwmon/hwmon8/temp1_input",
+        "/sys/devices/pci0000:00/0000:00:18.3/hwmon/hwmon9/temp1_input"
+      ],
+      "critical-threshold": 80,
+      "format": "{temperatureC}°C {icon}",
+      "format-icons": ["󰉬", "", "󰉪"]
+    },
+    "wireplumber": {
+      "format": "{volume}% {icon}",
+      "format-muted": "󰝟",
+      "format-icons": {
+        "default": ["󰕿", "󰖀", "󰕾"]
+      },
+      "on-click": "ghostty --class=floating.volume -e pulsemixer"
+    },
+    "custom/media": {
+      "format": "{icon} {text}",
+      "return-type": "json",
+      "max-length": 40,
+      "format-icons": {
+        "spotify": "",
+        "default": ""
+      },
+      "escape": true,
+      "exec": "waybar-mediaplayer 2> /dev/null", // wrapped python+playerctl, defined in configuration.nix
+      // left-click: pause/resume the displayed player; launch spotify-tray if none running
+      "on-click": "bash $HOME/.config/waybar/scripts/media-active.sh play-pause",
+      "on-scroll-up": "bash $HOME/.config/waybar/scripts/media-active.sh next",
+      "on-scroll-down": "bash $HOME/.config/waybar/scripts/media-active.sh previous",
+      // right-click: GTK menu with media controls + quit
+      "menu": "on-click-right",
+      "menu-file": "$HOME/.config/waybar/media_menu.xml",
+      "menu-actions": {
+        "playpause": "bash $HOME/.config/waybar/scripts/media-active.sh play-pause",
+        "next": "bash $HOME/.config/waybar/scripts/media-active.sh next",
+        "prev": "bash $HOME/.config/waybar/scripts/media-active.sh previous",
+        "mute": "bash $HOME/.config/waybar/scripts/spotify-mute.sh",
+        "focus_spotify": "bash $HOME/.config/waybar/scripts/media-active.sh focus-spotify",
+        "quit": "pkill spotify"
+      }
+    },
+    "custom/power": {
+      "format": "⏻ ",
+      "tooltip": false,
+      "menu": "on-click",
+      "menu-file": "$HOME/.config/waybar/power_menu.xml",
+      "menu-actions": {
+        "shutdown": "shutdown now",
+        "reboot": "reboot",
+        "suspend": "systemctl suspend",
+        "hibernate": "systemctl hibernate"
+      }
+    }
+  },
+
+  // ── Side bar: Philips (DP-3). Clock only, centered floating pill. ──
+  {
+    "name": "side",
+    "output": "DP-3",
+    "layer": "top",
+    "height": 30,
+    "margin-top": 0,
+    "modules-left": [],
+    "modules-center": [
+      "clock"
+    ],
+    "modules-right": [],
+    "clock": {
+      "timezone": "Europe/Oslo",
+      "tooltip-format": "<tt><small>{calendar}</small></tt>",
+      "format": "{:%H:%M  %d.%m.%Y}",
+      "format-alt": "{:%d.%m.%Y}"
+    }
+  }
+]

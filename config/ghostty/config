@@ -1,0 +1,15 @@
+theme = Rose Pine
+font-family = "Fira Code"
+
+# Warm rose-pine overrides — orange/pink lean
+background = 24191c
+foreground = f7ebe8
+cursor-color = ebbcba
+selection-background = 3a2a2e
+selection-foreground = e8d3cf
+
+# warm pink/orange accents over rose-pine palette
+palette = 1=eb6f92
+palette = 3=f6a878
+palette = 9=eb8f9c
+palette = 11=f7b48a

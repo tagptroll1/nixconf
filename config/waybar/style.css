@@ -1,0 +1,169 @@
+/* Firewatch palette — warm sunset, soft translucency, minimal. */
+@define-color bg     rgba(28, 15, 21, 0.72);
+@define-color pill   rgba(58, 32, 43, 0.55);
+@define-color text   #fff6ef;   /* near-white warm */
+@define-color muted  #f0cdbd;   /* bright soft coral */
+@define-color accent #e8624a;   /* coral highlight */
+@define-color urgent #d9533f;
+
+* {
+    /* Nerd Font supplies all module glyphs (icons) */
+    font-family: "JetBrainsMono Nerd Font", "Symbols Nerd Font", "Font Awesome 6 Free", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 13px;
+    min-height: 0;
+}
+
+/* Floating rounded bar */
+window#waybar {
+    background-color: @bg;
+    border-radius: 6px;
+    color: @text;
+    transition-property: background-color;
+    transition-duration: .4s;
+}
+
+/* Keep the first/last widgets off the bar edges */
+.modules-left {
+    margin-left: 8px;
+}
+
+.modules-right {
+    margin-right: 8px;
+}
+
+/* Side monitor: just the clock pill floats, no bar slab */
+window#waybar.side {
+    background-color: transparent;
+    border-radius: 0;
+}
+
+window#waybar.hidden {
+    opacity: 0.2;
+}
+
+button {
+    box-shadow: inset 0 -2px transparent;
+    border: none;
+    border-radius: 0;
+    color: @muted;
+}
+
+/* Soft coral underline on hover instead of a filled block */
+button:hover {
+    background: transparent;
+    box-shadow: inset 0 -2px @accent;
+    color: @text;
+}
+
+/* All modules: flat, transparent, just text */
+#clock,
+#custom-weather,
+#cpu,
+#memory,
+#temperature,
+#wireplumber,
+#custom-media,
+#tray,
+#idle_inhibitor,
+#custom-power {
+    padding: 0 10px;
+    background-color: transparent;
+    color: @text;
+}
+
+#memory {
+    font-weight: 900;
+}
+
+#window {
+    margin: 0 4px;
+    color: @muted;
+}
+
+/* dwl tags — minimal, coral accent on the active tag */
+#tags button {
+    padding: 0 7px;
+    margin: 4px 1px;
+    color: @muted;
+    background-color: transparent;
+    border-radius: 4px;
+}
+
+#tags button.occupied {
+    color: @text;
+}
+
+#tags button.focused,
+#tags button.active {
+    color: @text;
+    background-color: @pill;
+    box-shadow: none;
+}
+
+#tags button.urgent {
+    color: @urgent;
+}
+
+/* Clock + weather — subtle warm pill (anchors both bars) */
+#clock,
+#custom-weather {
+    background-color: @pill;
+    border-radius: 10px;
+    padding: 0 12px;
+    color: @text;
+}
+
+/* Main bar: fuse clock + weather into one continuous pill */
+window#waybar.main #clock {
+    border-radius: 10px 0 0 10px;
+    padding-right: 8px;
+}
+
+window#waybar.main #custom-weather {
+    border-radius: 0 10px 10px 0;
+    padding-left: 8px;
+    margin-left: -4px; /* close the global module spacing gap */
+}
+
+/* Media — quiet faded coral, no loud green block */
+#custom-media {
+    color: @muted;
+}
+
+#custom-media.custom-spotify {
+    color: @accent;
+}
+
+/* Status glyphs lean coral when they need attention */
+#temperature.critical {
+    color: @urgent;
+}
+
+#wireplumber.muted {
+    color: @urgent;
+}
+
+#network.disconnected {
+    color: @urgent;
+}
+
+#idle_inhibitor.activated {
+    color: @accent;
+}
+
+#tray > .passive {
+    -gtk-icon-effect: dim;
+}
+
+#tray > .needs-attention {
+    -gtk-icon-effect: highlight;
+    color: @urgent;
+}
+
+#custom-power {
+    color: @muted;
+}
+
+#custom-power:hover {
+    color: @urgent;
+}
