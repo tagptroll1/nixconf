@@ -1,11 +1,19 @@
 { self, inputs, ... }:
+let
+  host = "nixos";
+in
 {
   flake.nixosModules.tagpConfiguration =
     { pkgs, lib, ... }:
     {
       imports = [
         self.nixosModules.tagpHardware
-        inputs.mango.nixosModules.default
+        self.nixosModules.tagpUser
+        self.nixosModules.mangowm
+        self.nixosModules.homeManager
+        self.nixosModules.steam
+        self.nixosModules.fonts
+        self.nixosModules.sddm
       ];
 
       # Bootloader.
@@ -14,7 +22,7 @@
       boot.loader.timeout = 0; # skip menu; hold Space at boot to show it
       boot.kernelPackages = pkgs.linuxPackages_latest;
 
-      networking.hostName = "nixos";
+      networking.hostName = host;
       networking.networkmanager.enable = true;
 
       time.timeZone = "Europe/Oslo";
@@ -84,15 +92,6 @@
         powerManagement.enable = true; # save VRAM across hibernate
       };
 
-      users.users."tagp" = {
-        isNormalUser = true;
-        description = "tagp";
-        extraGroups = [
-          "networkmanager"
-          "wheel"
-        ];
-      };
-
       nixpkgs.config.allowUnfree = true;
 
       # List packages installed in system profile. To search, run:
@@ -141,7 +140,6 @@
         fastfetch
         vesktop
         spotify
-        # spotify-tray   # unused: spotify launches hidden via mango named scratchpad, SUPER+s reveals
         pulsemixer
         playerctl
         obs-studio # screen capture via existing pipewire/wlr portal; NVENC via nvidia driver
@@ -167,7 +165,6 @@
 
       ];
 
-      programs.mango.enable = true;
       programs.xwayland.enable = true;
       programs.dconf.enable = true; # required by easyeffects service
 
@@ -175,5 +172,7 @@
         "nix-command"
         "flakes"
       ];
+
+      system.stateVersion = "26.05";
     };
 }
