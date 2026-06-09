@@ -51,6 +51,9 @@
       home.file.".config/ghostty".source = config.lib.file.mkOutOfStoreSymlink ghosttyPath;
       home.file.".config/rofi".source = config.lib.file.mkOutOfStoreSymlink rofiPath;
       home.file.".config/discord/settings.json".source = (configPath + /discord/settings.json);
+      home.file.".local/share/applications/librewolf.desktop".source = (
+        configPath + /applications/override/librewolf.desktop
+      );
 
       home.stateVersion = "26.05";
     };

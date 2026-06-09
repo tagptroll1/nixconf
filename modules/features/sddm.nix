@@ -14,6 +14,29 @@
           PartialBlur = "false";
         };
       };
+      session =
+        name: confFile:
+        let
+          # sddm's wayland-session ends in `exec $@` (unquoted): word-splits, no
+          # shell quoting or $HOME expansion. So Exec must be a single token.
+          # Point it at a script that does the expansion itself.
+          launcher = pkgs.writeShellScript "${name}-launch" ''
+            exec mango -c "$HOME/.config/mango/${confFile}"
+          '';
+        in
+        (pkgs.writeTextDir "share/wayland-sessions/${name}.desktop" ''
+          [Desktop Entry]
+          Name=${name}
+          DesktopNames=mango;wlroots
+          Exec=${launcher}
+          Type=Application
+        '').overrideAttrs
+          (old: {
+            passthru = (old.passthru or { }) // {
+              # Join in new providedSessions attr
+              providedSessions = [ name ];
+            };
+          });
     in
     {
       services.displayManager.sddm = {
@@ -25,6 +48,13 @@
       };
 
       # theme must sit in sddm's theme search path
-      environment.systemPackages = [ sddm-astronaut ];
+      environment.systemPackages = [
+        sddm-astronaut
+      ];
+
+      services.displayManager.sessionPackages = [
+        (session "mango-wl" "config.conf")
+        (session "mango-qs" "config-qs.conf")
+      ];
     };
 }

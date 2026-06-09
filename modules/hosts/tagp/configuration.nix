@@ -100,6 +100,7 @@ in
         # System
         vim
         waybar
+        quickshell
         ghostty
         btop
         rofi
