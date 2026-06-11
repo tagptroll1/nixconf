@@ -54,6 +54,9 @@
       home.file.".local/share/applications/librewolf.desktop".source = (
         configPath + /applications/override/librewolf.desktop
       );
+      home.file.".local/share/applications/shutdown.desktop".source = (
+        configPath + /applications/shutdown.desktop
+      );
 
       home.stateVersion = "26.05";
     };

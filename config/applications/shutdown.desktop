@@ -1,0 +1,8 @@
+[Desktop Entry]
+Name=Shut down
+Comment=Power off the machine
+Exec=sh -c "$HOME/nixos-dotfiles/config/rofi/scripts/shutdown-confirm.sh"
+Icon=system-shutdown
+Categories=System
+Terminal=false
+Type=Application
