@@ -12,6 +12,7 @@
 
       mangoPath = "${config.home.homeDirectory}/nixos-dotfiles/config/mango";
       nvimPath = "${config.home.homeDirectory}/nixos-dotfiles/config/nvim";
+      tmuxPath = "${config.home.homeDirectory}/nixos-dotfiles/config/tmux";
       waybarPath = "${config.home.homeDirectory}/nixos-dotfiles/config/waybar";
       ghosttyPath = "${config.home.homeDirectory}/nixos-dotfiles/config/ghostty";
       rofiPath = "${config.home.homeDirectory}/nixos-dotfiles/config/rofi";
@@ -47,6 +48,7 @@
 
       home.file.".config/mango".source = config.lib.file.mkOutOfStoreSymlink mangoPath;
       home.file.".config/nvim".source = config.lib.file.mkOutOfStoreSymlink nvimPath;
+      home.file.".config/tmux".source = config.lib.file.mkOutOfStoreSymlink tmuxPath;
       home.file.".config/waybar".source = config.lib.file.mkOutOfStoreSymlink waybarPath;
       home.file.".config/ghostty".source = config.lib.file.mkOutOfStoreSymlink ghosttyPath;
       home.file.".config/rofi".source = config.lib.file.mkOutOfStoreSymlink rofiPath;

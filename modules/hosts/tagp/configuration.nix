@@ -114,6 +114,7 @@ in
         # Dev
         tree
         neovim
+        tmux
         wget
         fzf
         ripgrep
