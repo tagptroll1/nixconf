@@ -4,7 +4,11 @@ let
 in
 {
   flake.nixosModules.tagpConfiguration =
-    { pkgs, lib, ... }:
+    {
+      pkgs,
+      config,
+      ...
+    }:
     {
       imports = [
         self.nixosModules.tagpHardware
@@ -76,23 +80,31 @@ in
       # Fixes black session + tty monitors-sleep after hibernate (nv_drm plane-fence/flip-timeout).
       boot.kernelParams = [ "nvidia_drm.fbdev=1" ];
 
-      # If session stays black after resume but tty works, fbdev wasn't enough:
-      # the compositor's GPU channel faults (Xid 13). Next thing to try is restarting
-      # the session on resume (loses open windows, so last resort), e.g.:
-      #   systemd.services."restart-session-on-resume" = {
-      #     wantedBy = [ "post-resume.target" ];
-      #     after = [ "post-resume.target" "nvidia-resume.service" ];
-      #     script = "systemctl restart display-manager";
-      #   };
-
       hardware.graphics.enable = true;
       hardware.nvidia = {
         modesetting.enable = true;
         open = false;
         powerManagement.enable = true; # save VRAM across hibernate
+        # 595.x breaks surface re-registration after S4 resume (session crash);
+        # see github.com/NVIDIA/open-gpu-kernel-modules/issues/1136
+        package = config.boot.kernelPackages.nvidiaPackages.latest;
       };
 
       nixpkgs.config.allowUnfree = true;
+      # xdpw 0.8.x ext_image_copy_capture path gives frozen-first-frame screencast on
+      # mango+nvidia; 0.7.1 predates it (zwlr_screencopy only). drop with nixpkgs-xdpw input
+      nixpkgs.overlays = [
+        (final: prev: {
+          xdg-desktop-portal-wlr =
+            inputs.nixpkgs-xdpw.legacyPackages.${prev.stdenv.hostPlatform.system}.xdg-desktop-portal-wlr;
+        })
+        # mopidy: bump core + extensions to mopidy 4 stable (see modules/overlays/mopidy.nix)
+        self.overlays.mopidy
+      ];
+      # pnpm only build-time dep of vesktop; remove once nixpkgs bumps pnpm
+      nixpkgs.config.permittedInsecurePackages = [
+        "pnpm-10.29.2"
+      ];
 
       # List packages installed in system profile. To search, run:
       # $ nix search wget
@@ -108,6 +120,7 @@ in
         jq
         wlr-randr
         swayidle
+        wayland-pipewire-idle-inhibit
         wlopm
         inputs.awww.packages.${pkgs.stdenv.hostPlatform.system}.awww
 
@@ -118,7 +131,6 @@ in
         wget
         fzf
         ripgrep
-        zoxide
         lazygit
         git
         claude-code
@@ -141,6 +153,7 @@ in
         # Misc
         fastfetch
         vesktop
+        signal-desktop
         spotify
         pulsemixer
         playerctl

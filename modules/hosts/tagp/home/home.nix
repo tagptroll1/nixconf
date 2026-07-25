@@ -16,19 +16,38 @@
       waybarPath = "${config.home.homeDirectory}/nixos-dotfiles/config/waybar";
       ghosttyPath = "${config.home.homeDirectory}/nixos-dotfiles/config/ghostty";
       rofiPath = "${config.home.homeDirectory}/nixos-dotfiles/config/rofi";
+      idleInhibitPath = "${config.home.homeDirectory}/nixos-dotfiles/config/wayland-pipewire-idle-inhibit";
     in
     {
       imports = [
         self.homeModules.librewolf
+        self.homeModules.chromium
         self.homeModules.mopidy
+        self.homeModules.winbox
       ];
 
       programs.git.enable = true;
       programs.bash = {
         enable = true;
+        shellAliases.cd = "z";
+      };
+      programs.fish = {
+        enable = true;
+        shellAliases.cd = "z";
+      };
+      programs.zoxide.enable = true;
+
+      services.ssh-agent.enable = true;
+      programs.ssh = {
+        enable = true;
+        enableDefaultConfig = false;
+        settings."*".AddKeysToAgent = "yes";
       };
 
+      home.sessionVariables.EDITOR = "nvim";
+
       home.pointerCursor = {
+        enable = true;
         gtk.enable = true;
         name = "Adwaita";
         package = pkgs.adwaita-icon-theme;
@@ -52,6 +71,8 @@
       home.file.".config/waybar".source = config.lib.file.mkOutOfStoreSymlink waybarPath;
       home.file.".config/ghostty".source = config.lib.file.mkOutOfStoreSymlink ghosttyPath;
       home.file.".config/rofi".source = config.lib.file.mkOutOfStoreSymlink rofiPath;
+      home.file.".config/wayland-pipewire-idle-inhibit".source =
+        config.lib.file.mkOutOfStoreSymlink idleInhibitPath;
       home.file.".config/discord/settings.json".source = (configPath + /discord/settings.json);
       home.file.".local/share/applications/librewolf.desktop".source = (
         configPath + /applications/override/librewolf.desktop

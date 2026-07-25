@@ -1,0 +1,4 @@
+# vesktop's electron audio service holds a stream open 24/7, blocking swayidle hibernate.
+# It reports as "Chromium", so chromium-browser media also stops inhibiting (acceptable: librewolf is primary).
+[[node_blacklist]]
+app_name = "^Chromium$"
