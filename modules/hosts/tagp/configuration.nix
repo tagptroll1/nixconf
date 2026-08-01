@@ -140,6 +140,8 @@ in
         zig
         nixd
         nixfmt
+        marksman # markdown LSP
+        tree-sitter # nvim-treesitter main requires the CLI to build parsers
 
         # Screenshot
         grim
