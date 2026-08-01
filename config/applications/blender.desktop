@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Blender
+Comment=Open Blender from the BlenderProjects dev shell
+Exec=/run/current-system/sw/bin/nix develop /mnt/bigboi/BlenderProjects --command blender
+Icon=blender
+Terminal=false
+Categories=Graphics;3DGraphics;
+StartupNotify=true

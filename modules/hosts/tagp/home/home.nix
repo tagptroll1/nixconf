@@ -80,6 +80,9 @@
       home.file.".local/share/applications/shutdown.desktop".source = (
         configPath + /applications/shutdown.desktop
       );
+      home.file.".local/share/applications/blender.desktop".source = (
+        configPath + /applications/blender.desktop
+      );
 
       home.stateVersion = "26.05";
     };
