@@ -143,10 +143,12 @@ in
         marksman # markdown LSP
         tree-sitter # nvim-treesitter main requires the CLI to build parsers
 
-        # Screenshot
+        # Screenshot / screen recording
         grim
         slurp
         wl-clipboard
+        wf-recorder
+        ffmpeg # screen-record.sh remuxes mkv -> mp4 (stream copy)
 
         # Notifications
         mako

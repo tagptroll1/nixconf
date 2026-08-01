@@ -20,6 +20,7 @@
       "custom/weather"
     ],
     "modules-right": [
+      "custom/screenrecord",
       "idle_inhibitor",
       "cpu",
       "memory",
@@ -33,6 +34,15 @@
       "return-type": "json",
       "interval": 600,
       "exec": "bash $HOME/.config/waybar/scripts/weather.sh"
+    },
+    // Recording indicator. Hidden unless recording; the script pushes updates
+    // with SIGRTMIN+8, so no polling interval.
+    "custom/screenrecord": {
+      "format": "{}",
+      "return-type": "json",
+      "signal": 8,
+      "exec": "bash $HOME/.config/waybar/scripts/recorder-status.sh",
+      "on-click": "bash $HOME/.config/mango/scripts/screen-record.sh"
     },
     "idle_inhibitor": {
       "format": "{icon}",

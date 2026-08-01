@@ -65,6 +65,7 @@ button:hover {
 #custom-media,
 #tray,
 #idle_inhibitor,
+#custom-screenrecord,
 #custom-power {
     padding: 0 10px;
     background-color: transparent;
@@ -149,6 +150,10 @@ window#waybar.main #custom-weather {
 
 #idle_inhibitor.activated {
     color: @accent;
+}
+
+#custom-screenrecord.recording {
+    color: @urgent;
 }
 
 #tray > .passive {
