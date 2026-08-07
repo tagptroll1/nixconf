@@ -61,6 +61,11 @@ in
         ];
       };
 
+      # Bluetooth & PS4 controller
+      hardware.bluetooth.enable = true;
+      hardware.bluetooth.package = pkgs.bluez;
+      boot.kernelModules = [ "hidp" ]; # BT HID profile; autoload unreliable, DS4 won't connect without it
+
       # Audio
       security.rtkit.enable = true;
       services.pulseaudio.enable = false;
@@ -70,6 +75,39 @@ in
         alsa.support32Bit = true;
         pulse.enable = true;
         jack.enable = true;
+        # ALC4080 (onboard analog, USB-attached) glitches on the S32LE altsetting
+        # pipewire picks by default; S16_LE altsetting is clean.
+        wireplumber.extraConfig."51-alc4080-s16" = {
+          "monitor.alsa.rules" = [
+            {
+              matches = [ { "node.name" = "~alsa_output\\.usb-Generic_USB_Audio.*"; } ];
+              actions.update-props = {
+                "audio.format" = "S16LE";
+              };
+            }
+          ];
+        };
+        # xdg-desktop-portal Realtime interface fails here (fstatat ns/pid error),
+        # so clients fall back to low-priority scheduling instead of proper RT.
+        # rtkit path works fine (confirmed via rtkit-daemon), so go straight to it.
+        extraConfig.client."10-disable-rtportal" = {
+          "context.properties" = {
+            "module.rt" = false;
+          };
+          "context.modules" = [
+            {
+              name = "libpipewire-module-rt";
+              args = {
+                "rtportal.enabled" = false;
+                "rtkit.enabled" = true;
+              };
+              flags = [
+                "ifexists"
+                "nofail"
+              ];
+            }
+          ];
+        };
       };
 
       boot.blacklistedKernelModules = [ "amdgpu" ];
@@ -122,6 +160,9 @@ in
         swayidle
         wayland-pipewire-idle-inhibit
         wlopm
+        bluetui # bluetooth TUI, opened from the waybar bluetooth module
+        cosmic-files # COSMIC file manager, runs standalone outside the COSMIC session
+        mpv
         inputs.awww.packages.${pkgs.stdenv.hostPlatform.system}.awww
 
         # Dev

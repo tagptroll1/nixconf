@@ -66,6 +66,8 @@ button:hover {
 #tray,
 #idle_inhibitor,
 #custom-screenrecord,
+#custom-ps4battery,
+#bluetooth,
 #custom-power {
     padding: 0 10px;
     background-color: transparent;
@@ -154,6 +156,19 @@ window#waybar.main #custom-weather {
 
 #custom-screenrecord.recording {
     color: @urgent;
+}
+
+#custom-ps4battery.critical {
+    color: @urgent;
+}
+
+#bluetooth.connected {
+    color: @accent;
+}
+
+#bluetooth.disabled,
+#bluetooth.off {
+    color: @muted;
 }
 
 #tray > .passive {

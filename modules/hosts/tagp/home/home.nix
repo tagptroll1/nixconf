@@ -46,6 +46,23 @@
 
       home.sessionVariables.EDITOR = "nvim";
 
+      # so opening a video from cosmic-files lands in mpv
+      xdg.mimeApps = {
+        enable = true;
+        defaultApplications =
+          let
+            mpv = [ "mpv.desktop" ];
+          in
+          {
+            "video/mp4" = mpv;
+            "video/x-matroska" = mpv;
+            "video/webm" = mpv;
+            "video/quicktime" = mpv;
+            "video/x-msvideo" = mpv;
+            "video/mpeg" = mpv;
+          };
+      };
+
       home.pointerCursor = {
         enable = true;
         gtk.enable = true;
@@ -74,6 +91,27 @@
       home.file.".config/wayland-pipewire-idle-inhibit".source =
         config.lib.file.mkOutOfStoreSymlink idleInhibitPath;
       home.file.".config/discord/settings.json".source = (configPath + /discord/settings.json);
+      # bwrap-sandboxed apps (steam-run, epsxe) tmpfs over /etc and don't bind /etc/pipewire,
+      # so the /etc/pipewire/client.conf.d override never reaches them; ~/.config/pipewire is
+      # visible since bwrap fully binds /home. Same fix, reachable from inside the sandbox.
+      home.file.".config/pipewire/client.conf.d/10-disable-rtportal.conf".text = builtins.toJSON {
+        "context.properties" = {
+          "module.rt" = false;
+        };
+        "context.modules" = [
+          {
+            name = "libpipewire-module-rt";
+            args = {
+              "rtportal.enabled" = false;
+              "rtkit.enabled" = true;
+            };
+            flags = [
+              "ifexists"
+              "nofail"
+            ];
+          }
+        ];
+      };
       home.file.".local/share/applications/librewolf.desktop".source = (
         configPath + /applications/override/librewolf.desktop
       );
