@@ -83,27 +83,27 @@ button:hover {
     color: @muted;
 }
 
-/* dwl tags — minimal, coral accent on the active tag */
-#tags button {
+/* ext-workspace tags - minimal, coral accent on the active tag.
+   Empty tags carry .hidden; occupied ones carry no extra class. */
+#workspaces button {
     padding: 0 7px;
     margin: 4px 1px;
-    color: @muted;
+    color: @text;
     background-color: transparent;
     border-radius: 4px;
 }
 
-#tags button.occupied {
-    color: @text;
+#workspaces button.hidden {
+    color: @muted;
 }
 
-#tags button.focused,
-#tags button.active {
+#workspaces button.active {
     color: @text;
     background-color: @pill;
     box-shadow: none;
 }
 
-#tags button.urgent {
+#workspaces button.urgent {
     color: @urgent;
 }
 

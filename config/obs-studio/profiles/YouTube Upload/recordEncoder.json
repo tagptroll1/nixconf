@@ -1,0 +1,12 @@
+{
+    "rate_control": "CQP",
+    "cqp": 16,
+    "keyint_sec": 1,
+    "preset": "p7",
+    "tune": "hq",
+    "multipass": "fullres",
+    "profile": "high",
+    "bf": 2,
+    "lookahead": true,
+    "adaptive_quantization": true
+}

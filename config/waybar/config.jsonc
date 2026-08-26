@@ -12,7 +12,7 @@
     "margin-left": 540,
     "margin-right": 540,
     "modules-left": [
-      "dwl/tags",
+      "ext/workspaces",
       "custom/media"
     ],
     "modules-center": [
@@ -31,6 +31,14 @@
       "tray",
       "custom/power"
     ],
+    // mango exports tags over ext-workspace-v1, not the dwl ipc protocol.
+    // Empty tags are marked hidden, so ignore-hidden keeps all 9 on the bar.
+    "ext/workspaces": {
+      "format": "{name}",
+      "on-click": "activate",
+      "ignore-hidden": false,
+      "sort-by-name": true
+    },
     "custom/weather": {
       "format": "{}",
       "return-type": "json",

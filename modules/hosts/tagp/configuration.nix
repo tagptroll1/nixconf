@@ -138,6 +138,18 @@ in
         })
         # mopidy: bump core + extensions to mopidy 4 stable (see modules/overlays/mopidy.nix)
         self.overlays.mopidy
+        # obs postFixup runs addDriverRunpath over $out/lib only, so the obs-nvenc-test
+        # probe in $out/bin can't dlopen libnvidia-encode and OBS decides NVENC is absent
+        # (log: "Test process failed: nvenc_lib"). See NixOS/nixpkgs#382666.
+        (final: prev: {
+          obs-studio = prev.obs-studio.overrideAttrs (old: {
+            postFixup = (old.postFixup or "") + ''
+              for f in $out/bin/.obs-nvenc-test-wrapped $out/bin/obs-nvenc-test; do
+                [ -f "$f" ] && addDriverRunpath "$f"
+              done
+            '';
+          });
+        })
       ];
       # pnpm only build-time dep of vesktop; remove once nixpkgs bumps pnpm
       nixpkgs.config.permittedInsecurePackages = [
@@ -179,6 +191,10 @@ in
         clang
         cl
         zig
+        go
+        gopls
+        nodejs # pnpm needs a node runtime; also what vite/svelte-kit run on
+        pnpm
         nixd
         nixfmt
         marksman # markdown LSP
@@ -213,6 +229,13 @@ in
             pid=$(echo "$1" | ${gawk}/bin/awk '{print $1}')
             ${procps}/bin/kill "$pid" 2>/dev/null || ${procps}/bin/kill -9 "$pid" 2>/dev/null
           fi
+        '')
+
+        # rofi confirm prompt for poweroff. In PATH rather than run from the repo so
+        # the "nixos-dotfiles" path can't false-match rofi drun's exec field search.
+        (writeShellScriptBin "shutdown-confirm" ''
+          choice=$(printf 'No\nYes' | ${rofi}/bin/rofi -dmenu -p "Are you sure?")
+          [ "$choice" = "Yes" ] && ${systemd}/bin/systemctl poweroff
         '')
 
         # waybar custom/media: python3 with pygobject + playerctl GIR typelib

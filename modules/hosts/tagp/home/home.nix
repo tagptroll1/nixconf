@@ -17,6 +17,7 @@
       ghosttyPath = "${config.home.homeDirectory}/nixos-dotfiles/config/ghostty";
       rofiPath = "${config.home.homeDirectory}/nixos-dotfiles/config/rofi";
       idleInhibitPath = "${config.home.homeDirectory}/nixos-dotfiles/config/wayland-pipewire-idle-inhibit";
+      obsProfilesPath = "${config.home.homeDirectory}/nixos-dotfiles/config/obs-studio/profiles";
     in
     {
       imports = [
@@ -42,6 +43,15 @@
         enable = true;
         enableDefaultConfig = false;
         settings."*".AddKeysToAgent = "yes";
+
+        # Forgejo on the private VM runs its own ssh server on 2222, so the
+        # default port would reach the host's sshd instead.
+        matchBlocks."git.ybmn.no" = {
+          user = "git";
+          port = 2222;
+          identityFile = "~/.ssh/forgejo";
+          identitiesOnly = true;
+        };
       };
 
       home.sessionVariables.EDITOR = "nvim";
@@ -90,6 +100,10 @@
       home.file.".config/rofi".source = config.lib.file.mkOutOfStoreSymlink rofiPath;
       home.file.".config/wayland-pipewire-idle-inhibit".source =
         config.lib.file.mkOutOfStoreSymlink idleInhibitPath;
+      # only profiles/ - OBS writes logs, cache and window state into the rest of
+      # obs-studio/, and scenes reference absolute paths that don't belong in git.
+      home.file.".config/obs-studio/basic/profiles".source =
+        config.lib.file.mkOutOfStoreSymlink obsProfilesPath;
       home.file.".config/discord/settings.json".source = (configPath + /discord/settings.json);
       # bwrap-sandboxed apps (steam-run, epsxe) tmpfs over /etc and don't bind /etc/pipewire,
       # so the /etc/pipewire/client.conf.d override never reaches them; ~/.config/pipewire is

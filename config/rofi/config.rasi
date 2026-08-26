@@ -11,6 +11,11 @@ configuration {
     window-format:       "{w}  {t}";
     font:                "JetBrainsMono Nerd Font 11";
 
+    /* Rank by match quality, not launch count, so a name hit beats an
+       incidental hit deep in an entry's Exec or Keywords. */
+    sort:                true;
+    sorting-method:      "fzf";
+
     /* Snappy keynav */
     kb-row-up:           "Up,Control+k";
     kb-row-down:         "Down,Control+j";
