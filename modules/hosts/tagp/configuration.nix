@@ -18,6 +18,7 @@ in
         self.nixosModules.steam
         self.nixosModules.fonts
         self.nixosModules.sddm
+        self.nixosModules.omarchy
       ];
 
       # Bootloader.
@@ -150,6 +151,23 @@ in
             '';
           });
         })
+        # quickshell only pulls qtbase/qtsvg, whose image plugins are gif/ico/jpeg
+        # (+ png/bmp built in). Without qtimageformats, every webp the picker hands
+        # Qt directly - the lazy path, before a thumbnail exists - renders blank.
+        (final: prev: {
+          quickshell = prev.symlinkJoin {
+            name = "quickshell-${prev.quickshell.version}";
+            paths = [ prev.quickshell ];
+            nativeBuildInputs = [ prev.makeWrapper ];
+            postBuild = ''
+              for bin in $out/bin/*; do
+                wrapProgram "$bin" \
+                  --prefix QT_PLUGIN_PATH : ${prev.qt6.qtimageformats}/lib/qt-6/plugins
+              done
+            '';
+            inherit (prev.quickshell) meta;
+          };
+        })
       ];
       # pnpm only build-time dep of vesktop; remove once nixpkgs bumps pnpm
       nixpkgs.config.permittedInsecurePackages = [
@@ -167,11 +185,14 @@ in
         btop
         rofi
         papirus-icon-theme # app icons for rofi drun (Adwaita lacks them)
+        yaru-theme # the Yaru-* icon themes omarchy themes name in their icons.theme
         jq
         wlr-randr
         swayidle
         wayland-pipewire-idle-inhibit
         wlopm
+        wlsunset # night light for the quickshell shell (wlr-gamma-control)
+        libxkbcommon # xkbcli, for the keyboard-layout widget's language codes
         bluetui # bluetooth TUI, opened from the waybar bluetooth module
         cosmic-files # COSMIC file manager, runs standalone outside the COSMIC session
         mpv
@@ -198,6 +219,7 @@ in
         nixd
         nixfmt
         marksman # markdown LSP
+        qt6.qtdeclarative # qmlls, QML LSP
         tree-sitter # nvim-treesitter main requires the CLI to build parsers
 
         # Screenshot / screen recording

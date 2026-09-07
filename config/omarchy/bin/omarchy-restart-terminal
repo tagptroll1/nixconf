@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+# omarchy:summary=Reload supported terminal emulators after config changes
+
+if [[ -f ~/.config/alacritty/alacritty.toml ]]; then
+  touch ~/.config/alacritty/alacritty.toml
+fi
+
+# Upstream matches on the plain binary name, which a Nix wrapper renames: comm
+# is ".ghostty-wrappe", the kernel truncating it at 15 chars, so `pgrep -x
+# ghostty` never fires. Match the wrapped or plain name instead.
+pkill -SIGUSR1 -x '\.?kitty(-wrapped)?' 2>/dev/null
+pkill -SIGUSR2 -x '\.?ghostty(-wrappe.*)?' 2>/dev/null
+
+exit 0

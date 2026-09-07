@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+# omarchy:summary=Retint running Neovim instances with the generated Omarchy theme
+# omarchy:hidden=true
+
+set -uo pipefail
+
+# Neovim 0.12 opens a server socket per instance at $XDG_RUNTIME_DIR/nvim.<pid>.<n>
+# with no configuration needed, so every running editor is reachable here.
+# _G.OmarchyTheme is defined in config/nvim/init.lua; it re-reads the staged
+# palette and re-applies the colorscheme in place.
+#
+# Best effort throughout: a socket left behind by a crashed instance blocks on
+# connect, and this runs inside omarchy-theme-set's post-theme hooks, so every
+# call is bounded and no failure is allowed to fail the theme switch.
+shopt -s nullglob
+
+for socket in "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"/nvim.*; do
+  [[ -S $socket ]] || continue
+  timeout 2 nvim --server "$socket" --remote-expr 'v:lua.OmarchyTheme()' >/dev/null 2>&1 || true
+done
+
+exit 0

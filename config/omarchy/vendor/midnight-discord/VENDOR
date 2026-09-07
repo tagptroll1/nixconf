@@ -1,0 +1,20 @@
+source:   https://github.com/refact0r/midnight-discord
+file:     build/midnight.css
+version:  2.1.1
+commit:   6d3391b8222881437d4fe4cef9386cf26e2048ce
+fetched:  2026-08-28
+license:  MIT
+
+Vendored verbatim so no rebuild or network fetch is needed to restyle Vesktop.
+Refresh with:
+
+  curl -sSfL -o midnight.css \
+    https://raw.githubusercontent.com/refact0r/midnight-discord/master/build/midnight.css
+
+Two remote references survive in the file and are deliberately left in place to
+keep the diff against upstream clean:
+
+  - a Google Fonts @import for Figtree. Unused: default/themed/vesktop.css.tpl
+    sets --font to '' so nothing references the family.
+  - the default --dms-icon-svg-url. Unused: the template sets
+    --custom-dms-icon to off.

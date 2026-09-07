@@ -13,3 +13,9 @@ palette = 1=eb6f92
 palette = 3=f6a878
 palette = 9=eb8f9c
 palette = 11=f7b48a
+
+# Omarchy theme switching. omarchy-theme-set renders this file from the picked
+# theme's colors.toml; ghostty applies an included file after the one that
+# includes it, so it overrides the palette above whenever a theme is staged.
+# The leading ? keeps ghostty quiet before the first theme has been set.
+config-file = ?~/.local/state/omarchy/current/theme/ghostty.conf

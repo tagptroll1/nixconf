@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+
+# omarchy:summary=Retint COSMIC apps to the current Omarchy theme
+# omarchy:hidden=true
+
+THEME_DIR="$HOME/.local/state/omarchy/current/theme"
+THEME_NAME_PATH="$HOME/.local/state/omarchy/current/theme.name"
+SOURCE="$THEME_DIR/cosmic.ron"
+CONFIG_DIR="$HOME/.config/cosmic"
+
+# libcosmic keeps one file per key under <component>/<schema version>. cosmic-theme
+# 1.0.0 (cosmic-files 1.6) reads v2, which encodes colors as "#RRGGBBAA" strings;
+# v1 held float structs. A libcosmic bump is the only reason to touch these.
+THEME_VERSION="v2"
+MODE_VERSION="v1"
+TK_VERSION="v1"
+
+# A COSMIC app writes this directory on first run, so its absence means none is
+# in use here. Don't conjure one.
+[[ -d $CONFIG_DIR ]] || exit 0
+[[ -f $SOURCE ]] || exit 0
+
+mode=$(omarchy-theme-color mode)
+if [[ $mode == "light" ]]; then
+  theme_component="com.system76.CosmicTheme.Light"
+  is_dark="false"
+  icon_fallback="Yaru"
+else
+  theme_component="com.system76.CosmicTheme.Dark"
+  is_dark="true"
+  icon_fallback="Yaru-dark"
+fi
+
+theme_dir="$CONFIG_DIR/$theme_component/$THEME_VERSION"
+mkdir -p "$theme_dir"
+
+# cosmic-config watches each key file by path. Replacing one with a rename swaps
+# the inode out from under that watch, so the running app misses this change and
+# every later one -- it has to be truncated and rewritten in place. The window
+# for a torn read is a couple of dozen bytes, and a failed parse only costs the
+# app one frame of default color before the next write.
+write_key() {
+  local dir="$1" key="$2"
+
+  cat >"$dir/$key"
+}
+
+# Split the rendered theme on its `### <key>` headers, one cosmic-config key each.
+while IFS= read -r key; do
+  awk -v key="$key" '
+    $0 == "### " key { collecting = 1; next }
+    /^### / { collecting = 0 }
+    collecting { print }
+  ' "$SOURCE" | sed -e '/./,$!d' -e :a -e '/^\n*$/{$d;N;ba' -e '}' | write_key "$theme_dir" "$key"
+done < <(sed -n 's/^### //p' "$SOURCE")
+
+echo "$is_dark" | write_key "$theme_dir" is_dark
+if [[ -f $THEME_NAME_PATH ]]; then
+  printf '"%s"\n' "$(<"$THEME_NAME_PATH")" | write_key "$theme_dir" name
+fi
+
+# Which of the two themes above every COSMIC app reads.
+mode_dir="$CONFIG_DIR/com.system76.CosmicTheme.Mode/$MODE_VERSION"
+mkdir -p "$mode_dir"
+echo "$is_dark" | write_key "$mode_dir" is_dark
+
+# Icon theme. Omarchy themes name a Yaru variant, two of which (Yaru-grey,
+# Yaru-gray) don't exist upstream, so an unresolvable name falls back rather than
+# leaving COSMIC pointed at a missing theme.
+icon_theme=""
+[[ -f $THEME_DIR/icons.theme ]] && icon_theme=$(<"$THEME_DIR/icons.theme")
+
+icon_theme_installed() {
+  local name="$1" dir
+
+  [[ -n $name ]] || return 1
+
+  for dir in "$HOME/.local/share" "$HOME/.icons" ${XDG_DATA_DIRS//:/ }; do
+    [[ -d $dir/icons/$name || -d $dir/$name ]] && return 0
+  done
+
+  return 1
+}
+
+icon_theme_installed "$icon_theme" || icon_theme="$icon_fallback"
+
+if icon_theme_installed "$icon_theme"; then
+  tk_dir="$CONFIG_DIR/com.system76.CosmicTk/$TK_VERSION"
+  mkdir -p "$tk_dir"
+  printf '"%s"\n' "$icon_theme" | write_key "$tk_dir" icon_theme
+fi
+
+# libcosmic only takes a theme change over a dbus signal from the COSMIC settings
+# daemon, which doesn't run in this session ("Failed to create watcher for
+# com.system76.CosmicTheme.Dark" at startup), so a running app keeps the palette it
+# started with. Relaunch it with the command line and working directory it had, so
+# it reopens on the same location. A nix wrapper renames the binary, so the process
+# is .cosmic-files-w(rapped) to the kernel -- same problem omarchy-restart-terminal
+# works around.
+restart_cosmic_apps() {
+  local pid cmdline cwd
+  local -a argv
+
+  for pid in $(pgrep -f '(^|/)\.?cosmic-files(-wrapped)?( |$)' 2>/dev/null); do
+    cmdline=$(tr '\0' '\n' <"/proc/$pid/cmdline" 2>/dev/null) || continue
+    cwd=$(readlink "/proc/$pid/cwd" 2>/dev/null) || continue
+    [[ -n $cmdline && -d $cwd ]] || continue
+
+    kill "$pid" 2>/dev/null || continue
+
+    mapfile -t argv <<<"$cmdline"
+    (cd "$cwd" && setsid "${argv[@]}" >/dev/null 2>&1 &)
+  done
+}
+
+restart_cosmic_apps

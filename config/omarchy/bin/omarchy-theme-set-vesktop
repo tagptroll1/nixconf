@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+# omarchy:summary=Retint Vesktop to the current Omarchy theme
+# omarchy:hidden=true
+
+DATA_DIR="${VENCORD_USER_DATA_DIR:-$HOME/.config/vesktop}"
+THEMES_DIR="$DATA_DIR/themes"
+BASE="$OMARCHY_PATH/vendor/midnight-discord/midnight.css"
+COLORS="$HOME/.local/state/omarchy/current/theme/vesktop.css"
+
+# Vesktop creates its data dir on first run, so its absence means the client
+# isn't in use here. Don't conjure one.
+[[ -d $DATA_DIR ]] || exit 0
+[[ -f $BASE && -f $COLORS ]] || exit 0
+
+mkdir -p "$THEMES_DIR"
+
+# Vencord watches this directory and hot-applies a changed theme, so the running
+# client retints without a restart. Build alongside the target under a name that
+# doesn't end in .css -- a half-written .css would show up in Vencord's theme
+# list -- then rename, which is atomic within the directory and is itself an
+# event the watcher sees.
+tmp="$THEMES_DIR/.omarchy.css.tmp"
+
+{
+  cat <<'META'
+/**
+ * @name Omarchy
+ * @description Follows the current Omarchy theme. Regenerated on every theme change by omarchy-theme-set-vesktop.
+ * @author refact0r
+ * @version 2.1.1
+ * @source https://github.com/refact0r/midnight-discord
+*/
+META
+  cat "$BASE"
+  cat "$COLORS"
+} >"$tmp"
+
+mv -f "$tmp" "$THEMES_DIR/omarchy.css"
