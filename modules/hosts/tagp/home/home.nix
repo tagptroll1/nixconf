@@ -54,6 +54,32 @@
         enableDefaultConfig = false;
         settings."*".AddKeysToAgent = "yes";
 
+        settings.${lib.concatStringsSep " " [
+          "private private.ybmn.no public public.ybmn.no"
+          "home01 10.0.0.69"
+          "home02 10.2.0.69"
+          "media media.ybmn.no 10.2.10.10"
+          "ocr 10.2.10.20"
+          "immich 10.2.10.21"
+          "jellyfin 10.2.10.22"
+          "arr 10.2.20.10"
+          "share 10.2.30.10"
+        ]} = {
+          IdentityFile = "~/.ssh/desktop";
+          IdentitiesOnly = true;
+        };
+
+        settings."private".HostName = "private.ybmn.no";
+        settings."public".HostName = "public.ybmn.no";
+        settings."home01".HostName = "10.0.0.69";
+        settings."home02".HostName = "10.2.0.69";
+        settings."media".HostName = "10.2.10.10";
+        settings."ocr".HostName = "10.2.10.20";
+        settings."immich".HostName = "10.2.10.21";
+        settings."jellyfin".HostName = "10.2.10.22";
+        settings."arr".HostName = "10.2.20.10";
+        settings."share".HostName = "10.2.30.10";
+
         # Forgejo on the private VM runs its own ssh server on 2222, so the
         # default port would reach the host's sshd instead.
         settings."git.ybmn.no" = {

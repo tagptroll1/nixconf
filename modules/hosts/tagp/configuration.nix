@@ -214,6 +214,11 @@ in
         zig
         go
         gopls
+        rustc
+        cargo
+        rust-analyzer
+        rustfmt
+        clippy
         nodejs # pnpm needs a node runtime; also what vite/svelte-kit run on
         pnpm
         nixd

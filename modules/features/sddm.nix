@@ -21,7 +21,8 @@
           # shell quoting or $HOME expansion. So Exec must be a single token.
           # Point it at a script that does the expansion itself.
           launcher = pkgs.writeShellScript "${name}-launch" ''
-            exec mango -c "$HOME/.config/mango/${confFile}"
+            # Preserve compositor and child-process diagnostics across logins and reboots.
+            exec ${pkgs.systemd}/bin/systemd-cat -t mango-session mango -c "$HOME/.config/mango/${confFile}"
           '';
         in
         (pkgs.writeTextDir "share/wayland-sessions/${name}.desktop" ''
