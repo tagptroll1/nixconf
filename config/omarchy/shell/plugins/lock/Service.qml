@@ -114,7 +114,6 @@ Item {
 
     resetAuthenticationState()
     lockRequested = true
-    armBlankTimer()
     logEvent("lock-requested")
     queueSessionLock()
 
@@ -134,24 +133,13 @@ Item {
     sessionLockStabilizeTimer.stop()
     pendingSessionLockTimer.stop()
     resetAuthenticationState()
-    idleBlankTimer.stop()
     sessionLock.locked = false
     logEvent("unlocked")
     runWake()
   }
 
-  function armBlankTimer() {
-    idleBlankTimer.armedAt = Date.now()
-    idleBlankTimer.restart()
-  }
-
   function runWake() {
     if (!wakeProcess.running) wakeProcess.running = true
-    if (lockRequested) armBlankTimer()
-  }
-
-  function runBlank() {
-    if (!blankProcess.running) blankProcess.running = true
   }
 
   function submitPassword(value) {
@@ -367,37 +355,10 @@ Item {
     }
   }
 
-  // Blank and wake through wlr-output-power-management, which mango implements
-  // and wlopm speaks. Upstream drove a laptop's backlight and keyboard LEDs
-  // instead; on a desktop the outputs themselves are the only thing to dim.
+  // Wake locked outputs on input; swayidle owns display blanking.
   Process {
     id: wakeProcess
     command: ["bash", "-c", "wlopm --on '*'"]
-  }
-
-  Process {
-    id: blankProcess
-    command: ["bash", "-c", "wlopm --off '*'"]
-  }
-
-  Timer {
-    id: idleBlankTimer
-    interval: 5000
-    repeat: false
-    property double armedAt: 0
-    onTriggered: {
-      // A countdown frozen by suspend fires right after resume, which would
-      // blank the freshly woken unlock screen under the user. Wall-clock time
-      // exposes the gap: take a fresh run-up instead of blanking.
-      if (Date.now() - armedAt > interval + 2000) {
-        root.armBlankTimer()
-        return
-      }
-      // Only a password check in flight should hold the display up. The
-      // fingerprint PAM stays armed for the whole lock, so gating on
-      // `authenticating` here would keep the panel lit until unlock.
-      if (root.lockRequested && !root.authenticatingPassword) root.runBlank()
-    }
   }
 
   Timer {
@@ -419,12 +380,6 @@ Item {
     function onScreensChanged() {
       root.requestSessionLock()
     }
-  }
-
-  onAuthenticatingPasswordChanged: {
-    if (!lockRequested) return
-    if (authenticatingPassword) idleBlankTimer.stop()
-    else armBlankTimer()
   }
 
   FileView {

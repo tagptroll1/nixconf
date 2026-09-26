@@ -41,14 +41,12 @@ Item {
   // It mirrors Hyprland's current decoration:rounding value.
   readonly property int cornerRadius: Style.cornerRadius
   // Toasts are fixed to the top-right corner. They only clear the omarchy bar
-  // when the bar occupies the top or right edge, so left/bottom bars do not
-  // pull notification popups away from the expected top-right location.
-  // Falls back to the bar's default size (26 horizontal / 28 vertical) when
-  // shell.bar isn't reachable so the popup never lands on top of the bar.
-  readonly property string barPosition: shell && shell.barConfig ? String(shell.barConfig.position || "top") : "top"
-  readonly property bool barVertical: barPosition === "left" || barPosition === "right"
-  readonly property int defaultBarSize: barVertical ? Style.bar.sizeVertical : Style.bar.sizeHorizontal
-  readonly property int liveBarSize: shell && shell.bar && !shell.bar.barHidden ? Math.max(0, shell.bar.barSize) : defaultBarSize
+  // The bar is across the top, so popups clear its height. Falls back to the
+  // bar's declared size when shell.bar isn't reachable yet, so a popup never
+  // lands on top of the bar.
+  readonly property string barPosition: shell && shell.bar ? String(shell.bar.position) : "top"
+  readonly property int defaultBarSize: Style.bar.sizeHorizontal
+  readonly property int liveBarSize: shell && shell.bar ? Math.max(0, shell.bar.barSize) : defaultBarSize
   readonly property int barClearance: liveBarSize + Style.gapsOut
 
   // Live Notification objects by originalId, kept OUT of the ListModels: a
@@ -83,6 +81,12 @@ Item {
     persisted.doNotDisturb = !!value
   }
 
+  // For callers inside the shell (the menu's Notifications toggle), which have
+  // the service itself rather than the IPC target.
+  function toggleDoNotDisturb() {
+    setDoNotDisturb(!doNotDisturb)
+  }
+
   // popupModel feeds the on-screen toast stack — the only model the service
   // keeps. Everything a toast leaves behind lives on disk under historyDir.
   //
@@ -100,6 +104,8 @@ Item {
   readonly property int maxPopupDuration: 30000
 
   function durationFor(urgency, expireTimeout) {
+    // Zero explicitly requests no expiry; -1 uses the server default.
+    if (expireTimeout === 0) return 0
     switch (urgency) {
     case NotificationUrgency.Critical:
       return 0
@@ -118,15 +124,7 @@ Item {
     return Math.round(ms)
   }
 
-  // DND bypass: only let through notifications we trust to be intentional
-  // and rare.
-  //   - omarchy-action: a user-action confirmation toast ("Theme changed",
-  //     "Screenshot saved"). The user JUST did something — their feedback
-  //     should show.
-  //   - urgency=critical AND app_name=notify-send: bare-CLI emergency alerts.
-  //     Trusted because it's almost always omarchy or system shell scripts —
-  //     chat apps set app_name to their brand (Discord/Slack/Vesktop), which
-  //     falls outside this rule.
+  // Only critical bare-CLI alerts bypass DND; category never overrides urgency.
   function shouldBypassDnd(notification) {
     return NotificationLogic.shouldBypassDnd(notification, NotificationUrgency.Critical)
   }
@@ -140,8 +138,7 @@ Item {
   //   - app_name is "notify-send" (the CLI default — means the sender
   //     didn't bother declaring an identity, so it's almost certainly
   //     ephemeral test/feedback noise)
-  //   - app_name is "omarchy-action" (Omarchy's own user-action toasts —
-  //     the user just triggered them)
+  //   - app_name is "send-notification" (CLI feedback without a window)
   // Their toasts still land in history like any other once they've been on
   // screen; the distinction only decides whether a DND-silenced one is worth
   // recording at all.
@@ -352,23 +349,11 @@ Item {
     while (popupModel.count > 0) dismissPopup(0)
   }
 
-  // Run the popup's click action, then dismiss. Omarchy's own toasts carry the
-  // action as an argv vector in the `execArgv` role (see execArgvFromHints),
-  // which the persistence files preserve, so restored toasts stay clickable.
-  // Third-party clients register a libnotify action under the canonical
-  // identifier "default" instead; that one only works while the sender is live.
+  // Standard actions only work while the sender is live.
   function invokePopupDefault(index) {
     if (index < 0 || index >= popupModel.count) return
     var entry = popupModel.get(index)
 
-    // Run the argv (via Util.execArgv, no shell interpretation). Detached so it
-    // outlives the shell, which installer toasts depend on: they restart it.
-    var argv = NotificationLogic.parseExecArgv(entry ? entry.execArgv : "")
-    if (argv) {
-      Util.execArgv(argv)
-      dismissPopup(index)
-      return
-    }
     // Restored rows have no live actions, and looking up liveRefs by their
     // old-generation id could fire an unrelated fresh notification's action.
     var ref = entry && !isRestoredRow(entry) ? liveRefs[entry.originalId] : null
@@ -400,7 +385,7 @@ Item {
   // has no match-by-appid dispatcher, so resolve the client id first; matching
   // is case-insensitive and accepts a reverse-DNS appid ending in the name.
   function focusApp(entry) {
-    if (!entry || !entry.app) return
+    if (!entry || !entry.app || NotificationLogic.isEphemeralApp(entry.app)) return
     focusAppProc.command = ["bash", "-c",
       "id=$(mmsg get all-clients 2>/dev/null | jq -r --arg app \"$1\" '" +
       "[.clients[] | select((.appid | ascii_downcase) == ($app | ascii_downcase) " +
@@ -668,8 +653,7 @@ Item {
         summary: row.summary,
         body: row.body,
         image: row.image,
-        glyph: row.glyph || "",
-        execArgv: row.execArgv || "",
+        category: row.category,
         urgency: row.urgency,
         timestamp: row.timestamp
       }, imagesDir).entry)
@@ -687,15 +671,14 @@ Item {
       popupModel.insert(0, {
         id: -1,
         originalId: -1,
-        app: "omarchy-action",
-        appIcon: "",
+        app: "send-notification",
+        appIcon: "󰂚",
         summary: "No recent notifications",
         body: "",
         image: "",
-        glyph: "󰂚",
-        execArgv: "",
+        category: "",
         urgency: NotificationUrgency.Low,
-        expireTimeout: 0,
+        expireTimeout: -1,
         timestamp: Date.now()
       })
       return
@@ -742,10 +725,9 @@ Item {
       if (duration > 0) {
         entry.deadline = now + duration
         persistPopupFile(entry)
-        // deadline is persistence metadata, not a model role — fresh rows
-        // never carry it, and ListModel roles must stay consistent.
-        delete entry.deadline
       }
+      // Deadlines belong to persistence, not the popup model.
+      delete entry.deadline
       live.push(entry)
     }
     if (live.length === 0) return
@@ -1002,7 +984,7 @@ Item {
             required property string summary
             required property string body
             required property string image
-            required property string glyph
+            required property string category
             required property int urgency
             required property double expireTimeout
             required property double timestamp
@@ -1053,7 +1035,7 @@ Item {
               timestamp: cardSlot.timestamp
               cornerRadius: service.cornerRadius
               fontFamily: service.shell && service.shell.bar ? service.shell.bar.fontFamily : ""
-              glyph: cardSlot.glyph
+              category: cardSlot.category
 
               onCloseRequested: service.dismissPopup(cardSlot.index)
               onCardClicked: service.invokePopupDefault(cardSlot.index)

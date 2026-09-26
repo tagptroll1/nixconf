@@ -33,13 +33,12 @@ function summaryStartsWithGlyph(summary) {
 
 function shouldBypassDnd(notification, criticalUrgency) {
   var appName = String((notification && notification.appName) || "")
-  if (appName === "omarchy-action") return true
   return appName === "notify-send" && notification && notification.urgency === criticalUrgency
 }
 
 function isEphemeralApp(appName) {
   var name = String(appName || "")
-  return name === "notify-send" || name === "omarchy-action"
+  return name === "notify-send" || name === "send-notification"
 }
 
 function stringHint(hints, name) {
@@ -53,43 +52,9 @@ function stringHint(hints, name) {
   return ""
 }
 
-function glyphFromHints(hints) {
-  return stringHint(hints, "omarchy-glyph")
-}
-
-// The click action: a JSON argv string from omarchy-notification-send
-// --exec. Carried as data so a toast restored after a shell restart stays
-// clickable (a libnotify action can't — its sender is gone). Run via
-// Util.execArgv as bash positional parameters, never a shell string, so
-// attacker-controlled values (a title, a filename) can't become commands.
-function execArgvFromHints(hints) {
-  return stringHint(hints, "omarchy-exec-argv")
-}
-
-// Validate a persisted omarchy-exec-argv into a runnable argv, or null. This is
-// a STRUCTURAL check only: it fails closed on a malformed hint (non-array, a
-// non-string or empty program, or a leading-dash program that argv would read as
-// an option). It does not judge intent — a well-formed ["bash","-c",…] is
-// accepted. WHICH senders may set this hint is a separate boundary: any
-// session-bus process can, by the freedesktop protocol's design (see
-// docs/notifications.md), which is equivalent to same-uid code execution.
-function parseExecArgv(value) {
-  var text = String(value || "")
-  if (!text) return null
-
-  var parsed
-  try {
-    parsed = JSON.parse(text)
-  } catch (e) {
-    return null
-  }
-
-  if (!Array.isArray(parsed) || parsed.length === 0) return null
-  for (var i = 0; i < parsed.length; i++) {
-    if (typeof parsed[i] !== "string") return null
-  }
-  if (!parsed[0] || parsed[0].charAt(0) === "-") return null
-  return parsed
+function normalizeCategory(value) {
+  var category = String(value || "").trim().toLowerCase()
+  return category === "info" || category === "warning" || category === "error" ? category : ""
 }
 
 // The bare value behind an icon field. Quickshell hands the image-path hint
@@ -116,37 +81,38 @@ function isTextIcon(value) {
   var s = String(value || "")
   if (!s || s.length > 16) return false
   if (s.indexOf("/") >= 0 || /\s/.test(s)) return false
-  return s.charCodeAt(0) > 0x7f
+  return s.charCodeAt(0) > 0x7f || /^[0-9#*]\ufe0f?\u20e3$/.test(s)
 }
 
 function shouldRenderCompactGlyph(glyph, iconSource, singleLineToast) {
   return String(glyph || "").length > 0 && String(iconSource || "").length === 0 && !!singleLineToast
 }
 
+function normalizedTimeout(value) {
+  return typeof value === "number" && isFinite(value) && value >= -1 ? value : -1
+}
+
 function snapshotOf(notification, timestamp) {
   var n = notification || {}
   var id = n.id || 0
-  var expireTimeout = Number(n.expireTimeout || 0)
-  if (!isFinite(expireTimeout) || expireTimeout < 0) expireTimeout = 0
   return {
     id: id,
     originalId: id,
     app: n.appName || "",
-    appIcon: n.appIcon || "",
+    appIcon: iconName(n.appIcon),
     summary: String(n.summary || ""),
     body: n.body || "",
-    image: n.image || "",
-    glyph: glyphFromHints(n.hints),
-    execArgv: execArgvFromHints(n.hints),
+    image: iconName(n.image),
+    category: normalizeCategory(stringHint(n.hints, "category")),
     urgency: n.urgency,
-    expireTimeout: expireTimeout,
+    expireTimeout: normalizedTimeout(n.expireTimeout),
     timestamp: timestamp === undefined ? Date.now() : timestamp
   }
 }
 
 // Everything the popup card draws, and therefore everything an in-place
 // update has to write through to the row and its file.
-var POPUP_ROLES = ["app", "appIcon", "summary", "body", "image", "glyph", "execArgv", "urgency", "expireTimeout"]
+var POPUP_ROLES = ["app", "appIcon", "summary", "body", "image", "category", "urgency", "expireTimeout"]
 
 function popupRoles() {
   return POPUP_ROLES
@@ -183,14 +149,13 @@ function historyEntry(value, normalUrgency) {
     id: e.id || 0,
     originalId: e.originalId || e.id || 0,
     app: e.app || "",
-    appIcon: e.appIcon || "",
+    appIcon: iconName(e.appIcon || e.glyph),
     summary: e.summary || "",
     body: e.body || "",
-    image: e.image || "",
-    glyph: e.glyph || "",
-    execArgv: e.execArgv || "",
+    image: iconName(e.image),
+    category: normalizeCategory(e.category),
     urgency: typeof e.urgency === "number" ? e.urgency : normalUrgency,
-    expireTimeout: 0,
+    expireTimeout: -1,
     timestamp: e.timestamp || 0
   }
 }
@@ -226,9 +191,7 @@ function parseSettings(raw) {
 
 function popupEntry(value, normalUrgency) {
   var entry = historyEntry(value, normalUrgency)
-  var expire = Number((value || {}).expireTimeout || 0)
-  if (!isFinite(expire) || expire < 0) expire = 0
-  entry.expireTimeout = expire
+  entry.expireTimeout = normalizedTimeout((value || {}).expireTimeout)
   // Absolute expiry deadline, set only when a restore resets a surviving
   // popup's display lifetime. Kept out of the entry entirely when unset so
   // restored rows match the roles of freshly received ones.
@@ -260,12 +223,17 @@ function imageStem(entry) {
 // The filesystem path behind a file-backed image value, or "" for anything
 // a copy can't capture: themed icon names, in-process image:// URLs, empty.
 function localImageFile(value) {
-  var s = String(value || "")
+  var s = iconName(value)
   if (s.indexOf("file://") === 0) {
     s = s.slice(7)
     try { s = decodeURIComponent(s) } catch (e) {}
   }
   return s.charAt(0) === "/" ? s : ""
+}
+
+function isLucideIcon(value) {
+  return /\/lucide\/icons\/[a-z0-9-]+\.svg$/.test(localImageFile(value))
+    || /-(appIcon|image)\.lucide\.svg$/.test(localImageFile(value))
 }
 
 // The entry as it should hit the disk, plus the copies that make it true.
@@ -274,8 +242,7 @@ function localImageFile(value) {
 // values map onto themselves and produce no copy, keeping restores no-ops.
 function persistablePopup(entry, imagesDir) {
   var e = entry || {}
-  var out = {}
-  for (var key in e) out[key] = e[key]
+  var out = popupEntry(e, 1)
   var copies = []
   for (var i = 0; i < PERSISTED_IMAGE_ROLES.length; i++) {
     var role = PERSISTED_IMAGE_ROLES[i]
@@ -284,6 +251,8 @@ function persistablePopup(entry, imagesDir) {
     var source = localImageFile(value)
     if (source) {
       var copy = String(imagesDir || "") + imageStem(e) + "-" + role
+      // Preserve monochrome tinting when history no longer has the original path.
+      if (isLucideIcon(value)) copy += ".lucide.svg"
       if (source !== copy) copies.push({ from: source, to: copy })
       out[role] = "file://" + copy
     } else if (value.indexOf("image://") === 0) {
@@ -326,15 +295,15 @@ function parsePopupFiles(raw, normalUrgency) {
 
 // A persisted popup whose lifetime already ran out would have expired on
 // screen had the shell kept running, so it is not restored. duration 0 means
-// the popup never expires (critical urgency) and always survives restarts.
+// the popup never expires and always survives restarts.
 // A restore-reset deadline outranks the original timestamp: without it, a
 // second restart would judge a re-shown toast by a clock that no longer
 // governs its display and drop it while it is still on screen.
 function popupExpired(entry, duration, now) {
-  var deadline = Number((entry || {}).deadline || 0)
-  if (isFinite(deadline) && deadline > 0) return Number(now) >= deadline
   var lifetime = Number(duration || 0)
   if (!isFinite(lifetime) || lifetime <= 0) return false
+  var deadline = Number((entry || {}).deadline || 0)
+  if (isFinite(deadline) && deadline > 0) return Number(now) >= deadline
   return (Number(now) - Number((entry || {}).timestamp || 0)) >= lifetime
 }
 
@@ -397,9 +366,7 @@ if (typeof module !== "undefined") {
     shouldBypassDnd: shouldBypassDnd,
     isEphemeralApp: isEphemeralApp,
     stringHint: stringHint,
-    glyphFromHints: glyphFromHints,
-    execArgvFromHints: execArgvFromHints,
-    parseExecArgv: parseExecArgv,
+    normalizeCategory: normalizeCategory,
     iconName: iconName,
     isTextIcon: isTextIcon,
     shouldRenderCompactGlyph: shouldRenderCompactGlyph,
@@ -414,6 +381,7 @@ if (typeof module !== "undefined") {
     popupFileName: popupFileName,
     imageStem: imageStem,
     localImageFile: localImageFile,
+    isLucideIcon: isLucideIcon,
     persistablePopup: persistablePopup,
     serializePopup: serializePopup,
     parsePopupFiles: parsePopupFiles,

@@ -108,7 +108,7 @@ set_theme_background() {
   local new_background new_background_snapshot
 
   if ! choose_theme_background; then
-    omarchy-notification-send "No background was found for theme" -t 2000
+    send-notification --type warning -t 2000 "No background was found for theme"
     shell_ipc shell applyTheme "$colors_payload" "$shell_payload" || true
     return
   fi
@@ -309,6 +309,7 @@ elif [[ $OMARCHY_THEME_SKIP_BACKGROUND == "1" ]]; then
 else
   set_theme_background
 fi
+sddm-background-sync || true
 
 # The shared staging/current symlinks are updated and the shell has accepted
 # the transition. Let another theme selection queue only behind that critical

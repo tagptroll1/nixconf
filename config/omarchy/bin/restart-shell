@@ -1,0 +1,42 @@
+#!/usr/bin/env bash
+# Restart the quickshell session (the bar, the menu, the notifications).
+#
+# `qs kill && quickshell` in one breath races: kill returns as soon as the quit
+# is delivered, not when the process is gone, and the new instance then finds
+# the old one still holding its layer surfaces and IPC socket - with -n it just
+# exits, leaving no shell at all. So wait for the old PID to actually die.
+set -uo pipefail
+
+pid=$(qs list 2>/dev/null | awk '/Process ID:/ { print $3; exit }')
+
+qs kill >/dev/null 2>&1
+
+wait_for_exit() {
+  local deadline=$1
+  while ((deadline--)); do
+    kill -0 "$pid" 2>/dev/null || return 0
+    sleep 0.1
+  done
+  return 1
+}
+
+if [[ -n $pid ]]; then
+  # A shell wedged badly enough to need restarting may not answer the quit.
+  wait_for_exit 50 || { kill "$pid" 2>/dev/null; wait_for_exit 50; }
+fi
+
+# The compositor still has to drop the layer surfaces the old instance left.
+sleep 0.3
+
+quickshell -n -d
+
+# The shell is the notification server, so nothing sent before it owns the bus
+# name arrives anywhere. Wait for the name, then say the restart happened.
+for _ in {1..100}; do
+  owner=$(busctl --user call org.freedesktop.DBus /org/freedesktop/DBus \
+    org.freedesktop.DBus NameHasOwner s org.freedesktop.Notifications 2>/dev/null)
+  [[ $owner == "b true" ]] && break
+  sleep 0.1
+done
+
+send-notification -i refresh-cw "Quickshell reloaded"

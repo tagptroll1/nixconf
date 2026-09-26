@@ -45,29 +45,59 @@ let
       }
       ''
         mkdir -p $out/bin
+        mkdir -p $out/share/config-icons $out/share/fish/vendor_completions.d
+        ln -s ${../../config/icons/lucide} $out/share/config-icons/lucide
+        install -m644 ${../../config/fish/completions/send-notification.fish} \
+          $out/share/fish/vendor_completions.d/send-notification.fish
         for script in $src/*; do
           name=$(basename "$script")
           install -Dm755 "$script" "$out/bin/$name"
-          wrapProgram "$out/bin/$name" --prefix PATH : "$runtimeDeps:$out/bin"
+          if [ "$name" = send-notification ]; then
+            wrapProgram "$out/bin/$name" --prefix PATH : "$runtimeDeps:$out/bin" \
+              --set CONFIG_ICON_DIR "$out/share/config-icons/lucide/icons"
+          else
+            wrapProgram "$out/bin/$name" --prefix PATH : "$runtimeDeps:$out/bin"
+          fi
         done
       '';
 in
 {
   flake.nixosModules.omarchy =
-    { pkgs, ... }:
     {
-      environment.systemPackages = [ (mkOmarchyBin pkgs) ];
+      pkgs,
+      lib,
+      config,
+      ...
+    }:
+    {
+      # The flake output this host is built from. nixos-rebuild defaults it to
+      # networking.hostName, which is not the attr name here, so anything that
+      # runs a rebuild has to be told: set beside `nixosConfigurations.<name>`.
+      options.omarchy.flakeAttr = lib.mkOption {
+        type = lib.types.str;
+        default = config.networking.hostName;
+        description = "nixosConfigurations attribute this host is built from.";
+      };
+
+      config.environment.systemPackages = [
+        (mkOmarchyBin pkgs)
+        pkgs.wtype
+      ];
+
+      config.security.pam.services.omarchy-lock-password.allowNullPassword = false;
     };
 
   flake.homeModules.omarchy =
     {
       config,
+      osConfig,
       pkgs,
       lib,
       ...
     }:
     let
-      omarchyPath = "${config.home.homeDirectory}/nixos-dotfiles/config/omarchy";
+      repoPath = "${config.home.homeDirectory}/nixos-dotfiles";
+      omarchyPath = "${repoPath}/config/omarchy";
       omarchyBin = mkOmarchyBin pkgs;
     in
     {
@@ -77,8 +107,17 @@ in
       # OMARCHY_PATH points here; the shell and every omarchy-* helper resolve
       # plugins, themes, templates and the menu definition relative to it.
       home.file.".config/omarchy".source = config.lib.file.mkOutOfStoreSymlink omarchyPath;
+      # Where this desktop was built from, written by the build itself. The
+      # shell's Packages menu edits modules/apps under `repo` and rebuilds
+      # `flake#attr`, so it reads them from here rather than assuming a checkout
+      # path or a host name. Not inside .config/omarchy - that is the repo.
+      home.file.".config/omarchy-nix.json".text = builtins.toJSON {
+        repo = repoPath;
+        flake = "path:${repoPath}";
+        attr = osConfig.omarchy.flakeAttr;
+      };
       # config-qs.conf sets this for the quickshell session; set it here too so
-      # the helpers also work from a terminal and from the waybar session.
+      # the helpers also work from a terminal.
       home.sessionVariables.OMARCHY_PATH = "${config.home.homeDirectory}/.config/omarchy";
 
       # ~/.local/state/omarchy/current/{theme,background} is mutable state that
@@ -93,6 +132,10 @@ in
           run env OMARCHY_PATH="$HOME/.config/omarchy" OMARCHY_THEME_HEADLESS=1 \
             ${omarchyBin}/bin/omarchy-theme-set tokyo-night
         fi
+      '';
+
+      home.activation.sddmBackground = lib.hm.dag.entryAfter [ "omarchySeedTheme" ] ''
+        run ${omarchyBin}/bin/sddm-background-sync
       '';
 
       # omarchy-theme-set-claude runs on every theme change and refreshes

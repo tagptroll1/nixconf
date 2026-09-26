@@ -4,18 +4,20 @@ import Quickshell.Wayland
 import QtQuick
 import qs.Commons
 import qs.Ui
+import "../../Commons/Calc.js" as Calc
 import "MenuModel.js" as MenuModel
+import "MenuTree.js" as MenuTree
+import "NixPackages.js" as NixPackages
 
 Item {
   id: root
 
-  // Injected by omarchy-shell when this plugin is summoned.
+  // Injected by the host shell.
   property string omarchyPath: Quickshell.env("OMARCHY_PATH")
   property var shell: null
-  property var manifest: null
 
-  // Plugin lifecycle hooks. The host calls open(payloadJson) after
-  // `omarchy-shell shell summon omarchy.menu ...` and close() when hidden.
+  // Lifecycle hooks. The host calls open(payloadJson) on
+  // `shell summon omarchy.menu ...` and close() when hidden.
   property string pendingInitialMenu: "root"
 
   function open(payloadJson) {
@@ -36,21 +38,13 @@ Item {
   }
 
   function refresh() {
-    defaultMenuFile.reload()
-    userMenuFile.reload()
+    root.rebuildItems()
     return "ok"
   }
 
   function ping() { return "ok" }
 
   property string fontFamily: Style.font.menuFamily
-  // JSONC menu definitions. The shell parses both at startup and merges
-  // the user file on top of the defaults, so the keybind → IPC → visible
-  // path doesn't have to shell out to bash + jq on every open.
-  property string defaultMenuPath: omarchyPath + "/default/omarchy/omarchy-menu.jsonc"
-  property string userMenuPath: Quickshell.env("HOME") + "/.config/omarchy/extensions/omarchy-menu.jsonc"
-  property var defaultMenuItems: []
-  property var userMenuItems: []
   property bool opened: false
   property string mode: "menu"
   readonly property bool dmenuActive: mode === "select" || mode === "input"
@@ -74,6 +68,50 @@ Item {
   property var providersLoaded: ({})
   property var providerQueue: []
   property int providerRevision: 0
+
+  // ------------------------------------------------------------- packages
+  // The Packages section is declared in QML (NixPackages.js), not JSONC: its
+  // rows come from this repo's nix modules and its actions write them back.
+  readonly property string installMenu: "packages.install"
+  readonly property string confirmMenu: "packages.confirm"
+  // Filled in by the nix build through ~/.config/omarchy-nix.json (see
+  // modules/features/omarchy.nix): the checkout to edit, the flake to build and
+  // the output name inside it. The defaults only cover a shell running before
+  // that file exists - an empty attr lets nixos-rebuild pick its own.
+  property string repoPath: Quickshell.env("HOME") + "/nixos-dotfiles"
+  property string flakeRef: ""
+  property string flakeAttr: ""
+  readonly property var nixTarget: ({
+    repo: root.repoPath,
+    flake: root.flakeRef,
+    attr: root.flakeAttr
+  })
+
+  function loadNixConfig(raw) {
+    var nix = ({})
+    try { nix = JSON.parse(raw || "{}") } catch (e) { return }
+    if (nix.repo) root.repoPath = nix.repo
+    root.flakeRef = nix.flake || ""
+    root.flakeAttr = nix.attr || ""
+  }
+
+  FileView {
+    path: Quickshell.env("HOME") + "/.config/omarchy-nix.json"
+    watchChanges: true
+    printErrors: false
+    // `text()` is stale inside the change signal, so both paths go through
+    // reload → onLoaded.
+    onFileChanged: reload()
+    onLoaded: root.loadNixConfig(text())
+  }
+
+  // Where the next install lands. Tab flips it inside Install; a home-manager
+  // option ignores it, since those only exist in the home scope.
+  property string installScope: "home"
+  property var knownApps: ({})
+  property bool searchPending: false
+  property string pendingLabel: ""
+  property string pendingVerb: ""
 
   // Shared application engine (entries, hidden filters, icons, launch,
   // removal), owned by the shell and also used by the standalone launcher.
@@ -134,9 +172,26 @@ Item {
     resultProc.running = true
   }
 
+  // Most rows are a shell command. The rest name something inside this process:
+  // a panel to summon or a service to call, neither of which a detached command
+  // could reach.
   function runAction(action) {
     var command = String(action || "")
     if (!command) return
+
+    if (command.indexOf("summon:") === 0) {
+      if (root.shell) root.shell.summon(command.substring(7), "{}")
+      return
+    }
+
+    if (command.indexOf("service:") === 0) {
+      var parts = command.substring(8).split(":")
+      var service = root.shell ? root.shell.serviceFor(parts[0]) : null
+      var method = String(parts[1] || "")
+      if (service && typeof service[method] === "function") service[method]()
+      else console.warn("menu: no service method for", command)
+      return
+    }
 
     Util.execDetached(command)
   }
@@ -156,7 +211,10 @@ Item {
     var available = panel.height - top - Style.gapsOut - root.contentMargin * 2 - root.headerHeight - root.contentSpacing
     // The starting menu sets the ceiling along with the offset: drilling into
     // a longer submenu scrolls behind the fold instead of growing the card.
-    if (panel.maxRowsHeight >= 0) available = Math.min(available, panel.maxRowsHeight)
+    // Install is exempt: it opens with no rows at all, so that ceiling would
+    // pin it to the height of its own empty state.
+    if (panel.maxRowsHeight >= 0 && root.activeMenu !== root.installMenu)
+      available = Math.min(available, panel.maxRowsHeight)
     // A card that swallows the whole screen reads as a page, not a menu.
     return Math.min(available, Math.round(panel.height * 0.7))
   }
@@ -219,39 +277,17 @@ Item {
     return root.items[id] || null
   }
 
-  // ------------------------------------------------------------------
-  // JSONC → normalized item array. Mirrors the bash bin's jq pipeline so
-  // the on-disk authoring format stays untouched.
-  // ------------------------------------------------------------------
-
-  function stripJsonc(raw) {
-    return MenuModel.stripJsonc(raw)
-  }
-
-  function normalizeAliases(value) {
-    return MenuModel.normalizeAliases(value)
-  }
-
-  function normalizeItem(id, raw) {
-    return MenuModel.normalizeItem(id, raw)
-  }
-
-  function parseMenuJsonc(raw) {
-    return MenuModel.parseMenuJsonc(raw)
-  }
-
-  // Merge defaults + user extension. Later entries override earlier ones
-  // on a per-key basis (so the user can tweak label/icon/action without
-  // re-declaring the whole row).
-  function rebuildItemsFromSources() {
-    var mergedMenu = MenuModel.mergeMenuSources(root.defaultMenuItems, root.userMenuItems)
+  // The static rows come straight from MenuTree.js. Rebuilding drops every
+  // provider batch with them, so a list loaded once is enumerated again rather
+  // than carried over from the tree it no longer belongs to.
+  function rebuildItems() {
+    var built = MenuModel.itemsFromList(MenuTree.items())
     root.providerRevision += 1
     root.providersLoaded = ({})
     root.providerQueue = []
-    root.items = mergedMenu.items
-    root.itemOrder = mergedMenu.itemOrder
+    root.items = built.items
+    root.itemOrder = built.itemOrder
     root.rowsLoaded = true
-    root.evaluateGuards()
     if (root.opened) {
       root.rebuildDisplay()
       if (!root.dmenuActive) {
@@ -261,22 +297,27 @@ Item {
     }
   }
 
-  // Each known provider is a tiny bash one-liner that enumerates a list and
-  // emits one tab-delimited row per item: `label\tvalue\tcurrent`. The shell
-  // turns those into menu items children of `menuId`. A `volatile` provider
-  // re-runs every time its submenu is entered, so a font installed since the
-  // shell started shows up without restarting it.
+  Component.onCompleted: root.rebuildItems()
+
+  // A provider is a list that cannot be written down in advance: each is a bash
+  // one-liner emitting one tab-delimited row per item — `label\tvalue\tcurrent\tdescription\ticon`
+  // — and those become children of the submenu that declared it. A volatile
+  // provider re-runs every time its submenu is entered. `apps` and `nix-search`
+  // are answered in QML instead, further down.
   readonly property var providers: ({
-    "fonts": {
-      script: "current=$(omarchy-font-current 2>/dev/null); omarchy-font-list 2>/dev/null | while read -r f; do [[ -z $f ]] && continue; printf '%s\\t%s\\t%s\\n' \"$f\" \"$f\" \"$current\"; done",
-      icon: "",
+    // Volatile: installing or removing something rewrites what these list, and
+    // the menu is usually re-entered right after.
+    "nix-apps-enabled": {
+      script: NixPackages.appsScript(root.repoPath, true),
+      icon: "\udb80\udfd6",
       volatile: true,
-      actionFor: function(value) { return "omarchy-font-set " + Util.shellQuote(value) }
+      actionFor: function(value) { return "nix:remove:" + value }
     },
-    "power-profiles": {
-      script: "current=$(powerprofilesctl get 2>/dev/null); omarchy-powerprofiles-list 2>/dev/null | while read -r p; do [[ -z $p ]] && continue; printf '%s\\t%s\\t%s\\n' \"$p\" \"$p\" \"$current\"; done",
-      icon: "\udb81\udc0b",
-      actionFor: function(value) { return "omarchy-powerprofiles-set autodetect " + Util.shellQuote(value) }
+    "nix-apps-all": {
+      script: NixPackages.appsScript(root.repoPath, false),
+      icon: "\udb80\ude19",
+      volatile: true,
+      actionFor: function(value) { return "nix:configure:" + value }
     }
   })
 
@@ -328,9 +369,115 @@ Item {
     if (root.opened) root.rebuildDisplay()
   }
 
+  // ------------------------------------------------------------- packages
+  //
+  // Install is the one list that cannot be enumerated up front: nixpkgs is too
+  // large to hold, so the typed query goes to `nix search` and the answer
+  // replaces the rows. Everything else in the section reads the repo's own
+  // modules/apps directory.
+
+  function runSearch() {
+    if (root.activeMenu !== root.installMenu) return
+
+    var query = root.filterText.trim()
+    if (query.length < 2) {
+      root.swapRows(root.installMenu, [])
+      return
+    }
+    // Process ignores a command set while it is running, so the newest query
+    // waits for the one in flight rather than being dropped.
+    if (searchProc.running) {
+      root.searchPending = true
+      return
+    }
+
+    root.searchPending = false
+    searchProc.collected = ""
+    searchProc.query = query
+    searchProc.command = ["bash", "-lc", NixPackages.searchScript(root.repoPath), "bash", query]
+    searchProc.running = true
+  }
+
+  function swapRows(menuId, rows) {
+    var merged = MenuModel.swapProviderRows(root.items, root.itemOrder, menuId, rows)
+    root.items = merged.items
+    root.itemOrder = merged.itemOrder
+    if (root.opened) root.rebuildDisplay()
+  }
+
+  // A written change hands over to its own view rather than a dialog over the
+  // list it came from: the choice is a menu, so it is rows like everything
+  // else, and Backspace still walks back to where the change was made.
+  function showRebuildChoice() {
+    root.swapRows(root.confirmMenu, NixPackages.confirmRows(root.confirmMenu))
+    root.setActiveMenu(root.confirmMenu, true)
+  }
+
+  // Menu actions carry their own command string; these carry a `nix:` verb the
+  // shell answers itself, because they need the current scope, a written file
+  // and a confirmation the menu cannot express as one detached command.
+  function runNixAction(action) {
+    var parts = String(action || "").split(":")
+    var verb = parts[1] || ""
+    var rest = parts.slice(2)
+
+    if (verb === "update") {
+      root.cancel()
+      Util.execArgv(NixPackages.updateArgv(root.nixTarget))
+      return
+    }
+
+    if (verb === "rebuild") {
+      root.cancel()
+      Util.execArgv(NixPackages.rebuildArgv(root.nixTarget))
+      return
+    }
+
+    if (verb === "close") {
+      root.cancel()
+      return
+    }
+
+    if (verb === "configure") {
+      root.cancel()
+      Util.execArgv(NixPackages.configureArgv(root.nixTarget, NixPackages.appFile(root.repoPath, rest[0])))
+      return
+    }
+
+    if (verb === "remove") {
+      root.pendingLabel = rest[0]
+      root.pendingVerb = "removed"
+      writeProc.command = NixPackages.setEnabledArgv(NixPackages.appFile(root.repoPath, rest[0]), false)
+      writeProc.running = true
+      return
+    }
+
+    if (verb === "install") {
+      var kind = rest[0]
+      var attr = rest.slice(1).join(":")
+      var name = NixPackages.slug(attr)
+      var file = NixPackages.appFile(root.repoPath, name)
+
+      root.pendingLabel = attr
+      root.pendingVerb = root.knownApps[name] === false ? "re-enabled" : "installed"
+      // A module that is already here only needs its flag flipped back on —
+      // whatever the user grew inside it survives.
+      writeProc.command = root.knownApps[name] === false
+        ? NixPackages.setEnabledArgv(file, true)
+        : NixPackages.writeArgv(file, NixPackages.template(kind, attr, root.installScope))
+      writeProc.running = true
+    }
+  }
+
+
   function startProviderForMenu(id) {
     var entry = root.item(id)
     if (!entry || !entry.provider || root.providersLoaded[id]) return
+    // Install has no list until something is typed.
+    if (entry.provider === "nix-search") {
+      root.providersLoaded[id] = true
+      return
+    }
     if (entry.provider === "apps") {
       root.providersLoaded[id] = true
       root.mergeAppRows()
@@ -373,11 +520,12 @@ Item {
         id: rowId,
         parent: menuId,
         kind: "action",
-        icon: (value === current) ? "✓" : (spec.icon || ""),
+        // A row may carry its own icon; the provider's is the fallback.
+        icon: (value === current) ? "✓" : (parts[4] || spec.icon || ""),
         label: label,
         title: "",
         target: "",
-        description: "",
+        description: parts[3] || "",
         action: spec.actionFor(value),
         provider: "",
         aliases: [],
@@ -420,7 +568,7 @@ Item {
     if (!entry || !entry.provider || root.providersLoaded[id]) return
 
     // Native providers don't touch providerProc, so they never need to queue.
-    if (entry.provider === "apps") {
+    if (entry.provider === "apps" || entry.provider === "nix-search") {
       root.startProviderForMenu(id)
       return
     }
@@ -465,17 +613,15 @@ Item {
     return MenuModel.childCount(root.items, root.itemOrder, id)
   }
 
-  // Guarded items are hidden when their `when:` evaluates false. Static
-  // submenus are also hidden when none of their descendants are visible;
-  // provider-backed menus stay visible because their rows load on demand.
+  // A submenu with no visible children is hidden; a provider-backed one stays,
+  // because its rows load on demand.
   function isVisible(entry) {
-    return MenuModel.isVisible(root.items, root.itemOrder, root.whenResults, entry)
+    return MenuModel.isVisible(root.items, root.itemOrder, entry)
   }
 
-  // Label with the ✓ marker baked in when `checked:` or `disabled:` evaluated
-  // truthy.
+  // Label with the ✓ marker baked in for a row that is already installed.
   function labelFor(entry) {
-    return MenuModel.labelFor(entry, root.checkedResults, root.disabledResults)
+    return MenuModel.labelFor(entry)
   }
 
   function searchableToken(value) {
@@ -498,10 +644,10 @@ Item {
     return MenuModel.descriptionTextMatches(query, text)
   }
 
-  // Rows whose `disabled:` evaluated truthy stay listed but dimmed, and the
-  // cursor steps over them.
+  // An already-installed row stays listed but dimmed, and the cursor steps
+  // over it.
   function isDisabled(entry) {
-    return MenuModel.isDisabled(root.disabledResults, entry)
+    return MenuModel.isDisabled(entry)
   }
 
   // A disabled row earns its place in the submenu it belongs to, where the
@@ -516,7 +662,7 @@ Item {
   }
 
   function displayRow(entry, detail, score, section) {
-    return MenuModel.displayRow(root.items, root.itemOrder, root.checkedResults, root.disabledResults, entry, detail, score, section)
+    return MenuModel.displayRow(root.items, root.itemOrder, entry, detail, score, section)
   }
 
   function rowSelectable(index) {
@@ -602,6 +748,26 @@ Item {
     })
   }
 
+  // The answer to a "=" query, built through displayRow like every other row
+  // so the list model keeps one set of roles.
+  function calcRow(calculation) {
+    var entry = {
+      id: "calc",
+      parent: "",
+      kind: "calc",
+      icon: "=",
+      iconFont: "",
+      label: calculation.text,
+      description: "",
+      action: "",
+      provider: "",
+      aliases: [],
+      order: 0
+    }
+
+    return root.displayRow(entry, calculation.expression + "  ·  Enter copies", 0)
+  }
+
   function rebuildDisplay() {
     if (root.dmenuActive) {
       root.rebuildDmenuDisplay()
@@ -618,7 +784,21 @@ Item {
     var query = root.filterText.trim()
     root.searchDivider = false
 
-    if (query) {
+    // "=2+2" is arithmetic, not a filter: the answer is the whole list, and
+    // Enter copies it. An expression still being typed evaluates to nothing,
+    // so the list is empty until it means something.
+    if (Calc.isQuery(query)) {
+      var calculation = Calc.evaluate(query)
+      if (calculation) displayModel.append(root.calcRow(calculation))
+      layoutSerial += 1
+      root.settleCursor()
+      return
+    }
+
+    // Install already searched for this query, and the order it came back in is
+    // the ranking. Filtering it again would only drop rows nix matched on
+    // something the row text doesn't show.
+    if (query && active !== root.installMenu) {
       var currentRows = []
       var drilldownRows = []
 
@@ -722,7 +902,11 @@ Item {
     root.selectedIndex = 0
     root.cursorActive = root.mode !== "input"
     root.disarmPointer()
-    if (!root.dmenuActive && root.filterText.trim()) root.loadProvidersForSearch()
+    // An expression matches nothing by name, so neither the provider
+    // enumerations nor a nix search have anything to answer for it.
+    var calculating = !root.dmenuActive && Calc.isQuery(root.filterText)
+    if (!calculating && !root.dmenuActive && root.filterText.trim()) root.loadProvidersForSearch()
+    if (!calculating && root.activeMenu === root.installMenu) searchDebounce.restart()
     root.rebuildDisplay()
   }
 
@@ -730,6 +914,14 @@ Item {
     panel.freezeCardTop()
     if (!root.item(id)) id = "root"
     if (pushHistory && id !== root.activeMenu) root.navStack = root.navStack.concat([root.activeMenu])
+    // Search results belong to the query that produced them. Leaving Install
+    // drops them so they cannot turn up in a search from somewhere else, and
+    // the rebuild rows go the same way once their change is answered for.
+    if (id !== root.activeMenu && (id === root.installMenu || root.activeMenu === root.installMenu)) {
+      searchDebounce.stop()
+      root.swapRows(root.installMenu, [])
+    }
+    if (id !== root.confirmMenu && root.activeMenu === root.confirmMenu) root.swapRows(root.confirmMenu, [])
     root.activeMenu = id
     root.filterText = ""
     root.selectedIndex = 0
@@ -772,6 +964,14 @@ Item {
     if (!root.rowSelectable(index)) return
 
     var row = displayModel.get(index)
+    if (row.kind === "calc") {
+      root.copyResult(row.label)
+      return
+    }
+    if (String(row.action).indexOf("nix:") === 0) {
+      root.runNixAction(row.action)
+      return
+    }
     if (row.kind === "menu" || row.kind === "link") {
       root.setActiveMenu(row.target || row.itemId, true, fromPointer)
     } else if (row.kind === "app") {
@@ -819,6 +1019,15 @@ Item {
     root.finishRequest(value)
   }
 
+  // Picking a calculated answer copies it and closes: there is nothing to run,
+  // and the number is only useful somewhere else.
+  function copyResult(value) {
+    applySerial = requestSerial
+    opened = false
+    filterText = ""
+    Quickshell.execDetached(["bash", "-c", "printf %s " + Util.shellQuote(value) + " | wl-copy"])
+  }
+
   function applySelected(id, action) {
     if (!id) { cancel(); return }
 
@@ -846,7 +1055,6 @@ Item {
     selectedIndex = 0
     cursorActive = true
     root.disarmPointer()
-    root.evaluateGuards()
     opened = true
     rebuildDisplay()
     invalidateVolatileProvider(activeMenu)
@@ -939,6 +1147,42 @@ Item {
     }
   }
 
+  Timer {
+    id: searchDebounce
+    interval: 300
+    onTriggered: root.runSearch()
+  }
+
+  Process {
+    id: searchProc
+    property string collected: ""
+    property string query: ""
+    stdout: SplitParser {
+      onRead: function(data) { searchProc.collected += data + "\n" }
+    }
+    onExited: {
+      if (root.activeMenu === root.installMenu) {
+        var parsed = NixPackages.parseSearch(searchProc.collected, searchProc.query, root.installMenu)
+        root.knownApps = parsed.known
+        root.swapRows(root.installMenu, parsed.rows)
+      }
+      if (root.searchPending) Qt.callLater(function() { root.runSearch() })
+    }
+  }
+
+  // Writes the app module, or flips the enable line of one already there.
+  Process {
+    id: writeProc
+    onExited: function(exitCode) {
+      if (exitCode !== 0) {
+        Quickshell.execDetached(["send-notification", "--type", "error", "Packages", root.pendingLabel + ": could not write the module"])
+        root.cancel()
+        return
+      }
+      root.showRebuildChoice()
+    }
+  }
+
   Process {
     id: resultProc
     onExited: {
@@ -959,109 +1203,6 @@ Item {
     }
   }
 
-  // The JSONC sources are watched so live edits to the default file (or the
-  // user extension at ~/.config/omarchy/extensions/omarchy-menu.jsonc) take
-  // effect without restarting the shell.
-  FileView {
-    id: defaultMenuFile
-    path: root.defaultMenuPath
-    watchChanges: true
-    printErrors: false
-    onLoaded: { root.defaultMenuItems = root.parseMenuJsonc(text()); root.rebuildItemsFromSources() }
-    onFileChanged: reload()
-  }
-
-  FileView {
-    id: userMenuFile
-    path: root.userMenuPath
-    watchChanges: true
-    printErrors: false
-    onLoaded: { root.userMenuItems = root.parseMenuJsonc(text()); root.rebuildItemsFromSources() }
-    onLoadFailed: { root.userMenuItems = []; root.rebuildItemsFromSources() }
-    onFileChanged: reload()
-  }
-
-  // ---------------------------------------------------------------- guards
-  //
-  // `when:` (visibility) and `checked:` (✓ marker) are bash expressions the
-  // shell wasn't allowed to evaluate before the perf rewrite. Now the shell
-  // batches them into one bash subprocess per (re)load so the open path
-  // never has to wait on them.
-
-  property var whenResults: ({})       // id → true|false (allow visibility)
-  property var checkedResults: ({})    // id → true|false (show ✓)
-  property var disabledResults: ({})   // id → true|false (dim, skip cursor)
-  property bool guardsPending: false
-
-  function evaluateGuards() {
-    // Process ignores a command change while it is running, and `collected`
-    // belongs to the run in flight, so a second evaluation cannot overwrite
-    // the first: it would throw away the lines already read and never start.
-    // The surviving tail then lands as the whole answer, and every id lost
-    // with it goes back to showing, since a `when:` only hides on an explicit
-    // false. Wait for the run in flight and evaluate once it lands instead.
-    if (guardProc.running) {
-      root.guardsPending = true
-      return
-    }
-    root.guardsPending = false
-
-    var script = MenuModel.guardScript(root.items)
-    if (!script) {
-      root.whenResults = ({})
-      root.checkedResults = ({})
-      root.disabledResults = ({})
-      return
-    }
-    guardProc.collected = ""
-    guardProc.command = ["bash", "-lc", script]
-    guardProc.running = true
-  }
-
-  Process {
-    id: guardProc
-    property string collected: ""
-    stdout: SplitParser {
-      onRead: function(data) { guardProc.collected += data + "\n" }
-    }
-    onExited: function(exitCode, exitStatus) {
-      // A batch that was killed rather than finished has only told us about
-      // the rows it reached, and a row whose `when:` went unanswered shows.
-      // Keep the last complete set rather than let a half-read one through.
-      // A signal leaves the exit code at 0, so the status is what tells us.
-      if (exitCode !== 0 || exitStatus !== 0) {
-        if (root.guardsPending) Qt.callLater(function() { root.evaluateGuards() })
-        return
-      }
-
-      var nextWhen = ({})
-      var nextChecked = ({})
-      var nextDisabled = ({})
-      var lines = guardProc.collected.split("\n")
-      for (var i = 0; i < lines.length; i++) {
-        var line = lines[i].trim()
-        if (!line) continue
-        var colon = line.lastIndexOf(":")
-        if (colon < 0) continue
-        var value = line.substring(colon + 1) === "1"
-        var rest = line.substring(0, colon)
-        var tagAt = rest.lastIndexOf(":")
-        if (tagAt < 0) continue
-        var id = rest.substring(0, tagAt)
-        var tag = rest.substring(tagAt + 1)
-        if (tag === "w") nextWhen[id] = value
-        else if (tag === "c") nextChecked[id] = value
-        else if (tag === "d") nextDisabled[id] = value
-      }
-      root.whenResults = nextWhen
-      root.checkedResults = nextChecked
-      root.disabledResults = nextDisabled
-      if (root.opened) root.rebuildDisplay()
-      // Run the evaluation that had to stand aside. Deferred by a turn so the
-      // process is settled before its command is set again.
-      if (root.guardsPending) Qt.callLater(function() { root.evaluateGuards() })
-    }
-  }
   PanelWindow {
     id: panel
     visible: root.opened && root.rowsLoaded
@@ -1128,6 +1269,9 @@ Item {
 
           if (event.key === Qt.Key_Delete) {
             root.requestDeleteSelected()
+            event.accepted = true
+          } else if (event.key === Qt.Key_Tab && root.activeMenu === root.installMenu) {
+            root.installScope = root.installScope === "system" ? "home" : "system"
             event.accepted = true
           } else if (event.key === Qt.Key_Escape) {
             if (root.filterText) root.setFilter("")
@@ -1200,14 +1344,33 @@ Item {
 
           Text {
             anchors.left: parent.left
-            anchors.right: parent.right
+            anchors.right: scopeHint.visible ? scopeHint.left : parent.right
+            anchors.rightMargin: scopeHint.visible ? Style.space(8) : 0
             anchors.verticalCenter: parent.verticalCenter
-            text: root.filterText || (root.dmenuActive ? (root.dmenuPrompt + "…") : ((root.item(root.activeMenu) ? (root.item(root.activeMenu).title || root.item(root.activeMenu).label) : "Go") + "…"))
+            // The rebuild view names the change that got it here, since that is
+            // what the two rows under it answer for.
+            text: root.activeMenu === root.confirmMenu
+              ? (root.pendingLabel + " " + root.pendingVerb + "…")
+              : (root.filterText || (root.dmenuActive ? (root.dmenuPrompt + "…") : ((root.item(root.activeMenu) ? (root.item(root.activeMenu).title || root.item(root.activeMenu).label) : "Go") + "…")))
             color: root.foreground
             opacity: root.filterText ? 1 : 0.58
             font.family: root.fontFamily
             font.pixelSize: Style.font.heading
             elide: Text.ElideRight
+          }
+
+          // Where Enter would install, and the key that changes it. A search in
+          // flight shows here too, since nix takes a moment to answer.
+          Text {
+            id: scopeHint
+            visible: !root.dmenuActive && root.activeMenu === root.installMenu
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            text: (searchProc.running ? "… " : "") + "→ " + root.installScope + "  ⇥"
+            color: root.foreground
+            opacity: 0.58
+            font.family: root.fontFamily
+            font.pixelSize: Style.font.body
           }
 
         }

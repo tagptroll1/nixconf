@@ -86,7 +86,6 @@ Item {
     verticalAlignment: Text.AlignVCenter
 
     Behavior on color {
-      enabled: !root.bar || root.bar.foregroundAnimationEnabled
       ColorAnimation { duration: 160 }
     }
   }

@@ -4,6 +4,7 @@
 
 import QtQuick
 import QtQuick.Layouts
+import QtQuick.Effects
 import Quickshell
 import qs.Commons
 import qs.Ui
@@ -17,11 +18,7 @@ BorderSurface {
   property string summary: ""
   property string body: ""
   property string image: ""
-  // Nerd Font glyph rendered in the icon slot when no real icon is set.
-  // Used by omarchy-notification-send so user-action toasts (`Silenced
-  // notifications` etc.) show their bell/lock/etc. glyph without leaking
-  // into the summary text.
-  property string glyph: ""
+  property string category: ""
   // NotificationUrgency: Low=0, Normal=1, Critical=2 (upstream).
   property int urgency: 1
   property double timestamp: 0
@@ -39,12 +36,11 @@ BorderSurface {
   // which draws as text in the icon slot and never reaches Image.source.
   // The `check` flag avoids Qt's missing-texture placeholder for unknown names.
   readonly property string imageName: NotificationLogic.iconName(image)
-  readonly property string imageIcon: NotificationLogic.isTextIcon(imageName) ? "" : imageName
-  readonly property string smallIconSource: imageIcon.length > 0 ? iconSource(imageIcon) : iconSource(appIcon)
-  // An explicit glyph hint wins, then a character passed as the image or app icon.
-  readonly property string iconText: glyph.length > 0 ? glyph
-    : (NotificationLogic.isTextIcon(imageName) ? imageName
-      : (NotificationLogic.isTextIcon(appIcon) ? appIcon : ""))
+  readonly property string appIconName: NotificationLogic.iconName(appIcon)
+  readonly property string smallIconSource: NotificationLogic.isTextIcon(imageName) ? ""
+    : (imageName.length > 0 ? iconSource(imageName) : iconSource(appIconName))
+  readonly property string iconText: NotificationLogic.isTextIcon(imageName) ? imageName
+    : (NotificationLogic.isTextIcon(appIconName) ? appIconName : "")
   readonly property bool hasGlyph: iconText.length > 0
   readonly property bool compactGlyph: NotificationLogic.shouldRenderCompactGlyph(iconText, smallIconSource, singleLineToast)
   readonly property bool hasSmallIcon: smallIconSource.length > 0
@@ -56,6 +52,8 @@ BorderSurface {
 
   readonly property color dimColor: Qt.darker(Color.notifications.text, 1.4)
   readonly property color bodyColor: Qt.darker(Color.notifications.text, 1.15)
+  readonly property color titleColor: category === "error" ? Color.urgent
+    : (category === "warning" ? "#e5a637" : Color.notifications.text)
   readonly property color accentColor: urgency === 2 ? Color.urgent : (urgency === 0 ? dimColor : Color.notifications.countdown)
   readonly property var cardBorderSpec: Border.surfaceSpec("notifications", "border", Color.notifications.border, Math.max(1, Style.space(2)))
 
@@ -64,8 +62,8 @@ BorderSurface {
   }
 
   function iconSource(icon) {
-    var value = String(icon || "")
-    if (value.length === 0) return ""
+    var value = NotificationLogic.iconName(icon)
+    if (value.length === 0 || NotificationLogic.isTextIcon(value)) return ""
     if (value.indexOf("file://") === 0 || value.indexOf("image://") === 0) return value
     if (value.charAt(0) === "/") return Util.fileUrl(value)
     return Quickshell.iconPath(value, true)
@@ -136,10 +134,17 @@ BorderSurface {
           asynchronous: true
           smooth: true
           visible: !root.hasGlyph || smallIconImage.status === Image.Ready
+          // Lucide SVGs are black strokes: brighten to white, then tint to the
+          // theme foreground. A mask would binarize the antialiased edges.
+          layer.enabled: NotificationLogic.isLucideIcon(root.smallIconSource)
+          layer.effect: MultiEffect {
+            brightness: 1.0
+            colorization: 1.0
+            colorizationColor: Color.notifications.text
+          }
         }
 
-        // Text icon: an emoji or Nerd Font character passed as the image or
-        // app icon, or carried by the omarchy-glyph hint.
+        // Text icons never reach the image provider.
         Text {
           anchors.centerIn: parent
           visible: root.hasGlyph && smallIconImage.status !== Image.Ready
@@ -171,7 +176,7 @@ BorderSurface {
           visible: root.summary.length > 0
           text: root.summary
           font.family: "Liberation Sans"
-          color: Color.notifications.text
+          color: root.titleColor
           font.pixelSize: Style.font.title
           font.bold: true
           wrapMode: Text.WordWrap

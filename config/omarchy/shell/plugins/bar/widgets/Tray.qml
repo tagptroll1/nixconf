@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Effects
 import Quickshell.Services.SystemTray
+import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "TrayModel.js" as TrayModel
@@ -23,8 +24,12 @@ BarWidget {
   property var activeTrayAnchor: null
   readonly property color foreground: bar ? bar.foreground : Color.foreground
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
-  readonly property var pinnedIds: settings.pinned instanceof Array ? settings.pinned : []
-  readonly property var hiddenIds: settings.hidden instanceof Array ? settings.hidden : []
+  // Which icons the user pulled out of the drawer and which they banished:
+  // state the tray owns, kept in its own file so a pin survives a restart.
+  property var trayState: ({})
+  readonly property var pinnedIds: trayState.pinned instanceof Array ? trayState.pinned : []
+  readonly property var hiddenIds: trayState.hidden instanceof Array ? trayState.hidden : []
+  readonly property string stateDir: Quickshell.env("HOME") + "/.local/state/omarchy/settings"
   readonly property var pinnedItems: bucket("pinned")
   readonly property var drawerItems: bucket("drawer")
   readonly property var allItems: bucket("all")
@@ -189,9 +194,9 @@ BarWidget {
     return "drawer"
   }
 
+  // localsend has no tray UI worth keeping beside the shell.s own.
   function ownedByOmarchy(item) {
-    var layout = root.bar && root.bar.layoutConfig ? root.bar.layoutConfig : null
-    return TrayModel.ownedByOmarchy(item, layout)
+    return TrayModel.ownedByOmarchy(item)
   }
 
   function bucket(category) {
@@ -210,11 +215,38 @@ BarWidget {
     return result
   }
 
+  // Applied locally first so the icon moves on the click itself; the file
+  // watcher brings the same values back to the bar's other copies.
   function persistTrayState(pinned, hidden) {
-    if (!root.bar || !root.bar.shell || typeof root.bar.shell.updateEntryInline !== "function") return
-    var id = root.moduleName || "omarchy.tray"
-    root.bar.shell.updateEntryInline(id, { id: id, pinned: pinned, hidden: hidden })
+    root.trayState = { pinned: pinned, hidden: hidden }
+    stateFile.setText(JSON.stringify(root.trayState, null, 2) + "\n")
   }
+
+  FileView {
+    id: stateFile
+    path: root.stateDir + "/tray.json"
+    watchChanges: true
+    atomicWrites: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: {
+      try {
+        var parsed = JSON.parse(text() || "{}")
+        if (Util.isPlainObject(parsed)) root.trayState = parsed
+      } catch (e) {
+        console.warn("tray state parse failed:", e)
+      }
+    }
+  }
+
+  // atomicWrites lands a temp file beside the real one, so the directory has to
+  // be there before the first save.
+  Process {
+    id: ensureStateDirProc
+    command: ["mkdir", "-p", root.stateDir]
+  }
+
+  Component.onCompleted: ensureStateDirProc.running = true
 
   function togglePin(iid) {
     var p = pinnedIds.slice(), h = hiddenIds.slice()
@@ -578,7 +610,7 @@ BarWidget {
       Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.45),
       Color.popups.border, Math.max(1, Style.space(2)))
     contentWidth: trayMenuPopup.fittedContentWidth(Style.space(232))
-    contentHeight: trayMenuPopup.fittedContentHeight(menuHeaderHeight + trayMenuColumn.implicitHeight, Style.space(420))
+    contentHeight: trayMenuPopup.fittedContentHeight(menuHeaderHeight + trayMenuColumn.implicitHeight)
 
     // Column skips invisible children but keeps reporting their height, so
     // read the header's extent through its own visibility.
@@ -786,14 +818,18 @@ BarWidget {
                 enabled: !menuRow.modelData.isSeparator && menuRow.modelData.enabled
                 cursorShape: enabled ? Qt.PointingHandCursor : Qt.ArrowCursor
                 onClicked: {
-                  if (root.menuLevelSettling) return
+                  if (!root.trayMenuOpen || root.menuLevelSettling) return
                   if (menuRow.modelData.hasChildren) {
                     // Reset scroll BEFORE swapping the model: the swap destroys
                     // this delegate synchronously and ids stop resolving after.
                     trayMenuFlick.contentY = 0
                     root.enterSubmenu(menuRow.modelData, menuRow.rowText)
                   } else {
-                    menuRow.modelData.triggered()
+                    // Bypass Steam's tray callback so Exit explicitly requests shutdown.
+                    if (root.activeTrayItem && root.activeTrayItem.id === "steam" && menuRow.rowText === "Exit Steam")
+                      Quickshell.execDetached(["steam", "-shutdown"])
+                    else
+                      menuRow.modelData.triggered()
                     root.close()
                   }
                 }

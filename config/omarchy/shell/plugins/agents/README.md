@@ -31,10 +31,10 @@ there is no switch row at all; with none, the module leaves the bar entirely
 rather than sitting there with nothing to say. A CLI installed mid-session
 shows up at the next refresh, so nothing polls the disk waiting for it.
 
-That self-hiding is why the widget ships in the default bar layout: a machine
-that has never run an AI coding agent draws nothing, and the icon arrives on
-its own the first time a scan finds usage. Drop it with
-`omarchy plugin disable omarchy.agents`.
+That self-hiding is why the widget can sit in the bar unconditionally: a machine
+that has never run an AI coding agent draws nothing, and the icon arrives on its
+own the first time a scan finds usage. Drop it by removing its slot from
+[`../bar/Bar.qml`](../bar/Bar.qml).
 
 ## Data
 
@@ -101,9 +101,9 @@ only adds the meter and the spent-of-funded line under the real figure.
 
 ## Settings
 
-Settings live in the widget's entry in `~/.config/omarchy/shell.json`. The
-top-level keys can be set with
-`omarchy bar set omarchy.agents <key> <value>`:
+Settings are properties on the widget, set where [`../bar/Bar.qml`](../bar/Bar.qml)
+declares its slot (`settings: ({ refreshIntervalSec: 300 })`). Unset means the
+default below:
 
 | Key | Default | What it does |
 |---|---|---|
@@ -113,23 +113,21 @@ top-level keys can be set with
 | `syncFileName` | `<hostname>.json` | This machine's snapshot file |
 | `syncDeviceId` | hostname | Stable device name inside the snapshot |
 
-Numbers need `--json`, or they land in `shell.json` as strings:
+Per-agent enablement is nested under `providers`:
 
-```bash
-omarchy bar set omarchy.agents refreshIntervalSec 300 --json
-omarchy bar set omarchy.agents syncDir '~/Sync/agent-usage'
-```
-
-Per-agent enablement is nested, and `set` writes its key literally rather
-than walking a dotted path — so pass the whole `providers` object as JSON (or
-edit `shell.json` directly):
-
-```bash
-omarchy bar set omarchy.agents providers '{
-  "claude": { "enabled": true },
-  "codex": { "enabled": false },
-  "fireworks": { "enabled": true }
-}' --json
+```qml
+Slot {
+  region: "right"
+  moduleName: "omarchy.agents"
+  widget: Component {
+    AgentsPlugin.Panel {
+      settings: ({
+        refreshIntervalSec: 300,
+        providers: { "codex": { "enabled": false } }
+      })
+    }
+  }
+}
 ```
 
 `enabled` defaults to `true` for every discovered agent; set it to `false` to

@@ -9,8 +9,7 @@ Layout mirrors upstream so a refresh is an rsync from a fresh checkout:
 | path                        | upstream         | notes                                    |
 |-----------------------------|------------------|------------------------------------------|
 | `shell/`                    | `shell/`         | the quickshell config, patched (below)   |
-| `config/omarchy/shell.json` | same             | bar layout defaults                      |
-| `default/omarchy/`          | same             | menu definition + launcher hide list     |
+| `default/omarchy/`          | same             | launcher hide list (the menu definition is QML now) |
 | `themes/`                   | same             | all 22 upstream themes, backgrounds and previews included |
 | `default/themed/`           | same             | the `*.tpl` `omarchy-theme-set` renders per theme |
 | `bin/`                      | `bin/`           | only the helpers the shell actually calls, taken one at a time |
@@ -34,22 +33,23 @@ the rest of `default/` (including `default/fonts/`).
   with their runtime deps pinned (upstream instead relies on `$OMARCHY_PATH/bin`
   being on PATH).
 
-The shell writes its own user overrides to `~/.config/omarchy/shell.json` (bar
-layout edits) and creates `~/.config/omarchy/plugins/`. Through the symlink those
-land in this directory, i.e. in git.
+The shell has no config file: the bar, the menu and every option are declared in
+QML under `shell/`. What it does write is actual state, under
+`~/.local/state/omarchy/` — never into this directory. See
+[shell/README.md](shell/README.md).
 
 ## Idle and lock
 
-`omarchy.idle` and `omarchy.lock` are switched off in `disabledPlugins`. swayidle
-keeps blank-at-15-min and hibernate-at-30-min (`config/mango/execonce.conf`,
-shared with the waybar session), and locking is `SUPER+m` — mango quits back to
-the SDDM greeter, whose session picker switches between mango-wl and mango-qs.
+`shell/shell.qml` mounts the Wayland session lock service. `SUPER+l` locks;
+`SUPER+SHIFT+m` closes the session and returns to SDDM. `SUPER+m` toggles Spotify.
+Password authentication uses `/etc/pam.d/omarchy-lock-password`, declared in
+`modules/features/omarchy.nix`; the lock refuses to start until PAM is configured.
 
-The plugins are only disabled, not stripped, and their mango port is done: drop
-the two ids from `disabledPlugins` and add
-`security.pam.services.omarchy-lock-password = { allowNullPassword = false; };`
-to bring the quickshell lock screen back. Note it authenticates against
-`/etc/pam.d/omarchy-lock-password`, so it refuses to lock until that exists.
+The Quickshell idle timers stay disabled. swayidle keeps blank-at-15-min and
+hibernate-at-30-min (`config/mango/execonce.conf`); locking adds no separate
+display-blanking timer. The bar's Stay Awake indicator uses Wayland idle
+inhibition to pause both swayidle timers for the current shell session. Idle and
+hibernate do not automatically lock the session.
 
 ## Themes
 
@@ -113,11 +113,8 @@ Reapply these after any refresh from upstream.
 
 - Three bar indicators are gone, with the systems behind them:
   `bar/indicators/{Dictation,ScreenRecording,Reminder}.qml`, their entries in
-  `bar/widgets/Indicators.qml`'s `defaultIndicatorEntries` and
-  `Indicators.manifest.json`, the `plugins/reminders/` overlay, and the
-  `trigger.reminder*`, `trigger.capture.screenrecord*` and `*.ai.dictation` keys in
-  `default/omarchy/omarchy-menu.jsonc` (plus the screenrecord card-width case in
-  `plugins/menu/Menu.qml`). All three drove `omarchy-*` helpers that are not
+  `bar/widgets/Indicators.qml`.s `indicatorEntries`, the `plugins/reminders/`
+  overlay, and their menu rows. All three drove `omarchy-*` helpers that are not
   vendored; screen recording here is `config/mango/scripts/screen-record.sh`
   (wf-recorder, `CTRL+SHIFT+S`), not `gpu-screen-recorder`.
 - `panels/audio/Panel.qml` lost `volumeSinkName`, `resolveVolumeSink()`,
@@ -133,8 +130,8 @@ Reapply these after any refresh from upstream.
 
 **Added features**
 
-- `bar/indicators/Spotify.qml`, plus its entries in `bar/widgets/Indicators.qml`'s
-  `defaultIndicatorEntries` and `Indicators.manifest.json`. Replaces the waybar
+- `bar/indicators/Spotify.qml`, plus its entry in `bar/widgets/Indicators.qml`.s
+  `indicatorEntries`. Replaces the waybar
   session's `custom/media` module: click launches spotify (the mango windowrule
   `appid:Spotify,isnamedscratchpad:1` keeps it hidden) or toggles play/pause,
   scroll skips. Deliberately spotify-only - mopidy runs as a permanent MPRIS

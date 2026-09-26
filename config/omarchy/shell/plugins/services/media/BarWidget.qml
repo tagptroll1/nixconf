@@ -38,7 +38,6 @@ BarWidget {
       font.family: root.bar.fontFamily
       font.pixelSize: Style.font.body
       Behavior on color {
-        enabled: !root.bar || root.bar.foregroundAnimationEnabled
         ColorAnimation { duration: 160 }
       }
     }

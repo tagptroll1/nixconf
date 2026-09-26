@@ -1,0 +1,1171 @@
+diff -ruN '--exclude=build' '--exclude=flake.lock' a/include/mango/layout/layout.h b/include/mango/layout/layout.h
+--- a/include/mango/layout/layout.h	1970-01-01 01:00:01.000000000 +0100
++++ b/include/mango/layout/layout.h	2026-09-26 15:10:29.165405492 +0200
+@@ -6,6 +6,7 @@
+ #include "mango/layout/horizontal.h"
+ #include "mango/layout/overview.h"
+ #include "mango/layout/scroll.h"
++#include "mango/layout/stage.h"
+ #include "mango/layout/vertical.h"
+ #include <stdint.h>
+ 
+@@ -34,8 +35,9 @@
+ 	DWINDLE,
+ 	FAIR,
+ 	VERTICAL_FAIR,
++	STAGE,
+ };
+ 
+-extern Layout layouts[14];
++extern Layout layouts[15];
+ 
+ #endif
+diff -ruN '--exclude=build' '--exclude=flake.lock' a/include/mango/layout/stage.h b/include/mango/layout/stage.h
+--- a/include/mango/layout/stage.h	1970-01-01 01:00:00.000000000 +0100
++++ b/include/mango/layout/stage.h	2026-09-26 15:26:08.111335066 +0200
+@@ -0,0 +1,40 @@
++#ifndef __LAYOUT_STAGE_H__
++#define __LAYOUT_STAGE_H__ 1
++
++#include "mango/common/types.h"
++#include <stdbool.h>
++#include <stdint.h>
++#include <wlr/util/box.h>
++
++// Stage layout: a square in the middle of the monitor tiles up to four windows;
++// everything else is stashed on the sides as live, scaled-down cards that
++// shrink the further out they sit.
++
++void stage(Monitor *m);
++bool is_stage_layout(Monitor *m);
++
++// Size the client is configured to. Staged clients keep their logical size
++// while their box on screen is scaled.
++void stage_content_size(Client *c, int32_t *w, int32_t *h);
++// The client picked its own size (min size, X11 configure request).
++void stage_adopt_size(Client *c, int32_t w, int32_t h);
++// Folds box changes that were not scale changes into the logical size.
++void stage_sync_logical(Client *c);
++
++// Unstashes one window without rearranging (fullscreen, maximize).
++void stage_release(Client *c);
++// Returns stashed windows to tiling when the monitor leaves the stage layout.
++void stage_release_all(Monitor *m);
++
++// Pointer move hooks.
++bool stage_begin_move(Client *c, double x, double y);
++void stage_drag_motion(Client *c, uint32_t time);
++bool stage_drop(Client *c);
++Client *stage_tile_at_cursor(Monitor *m, Client *skip);
++
++// Popups of stashed windows stay unscaled, anchored to the scaled content.
++bool stage_popup_create(Popup *popup);
++void stage_popup_destroy(Popup *popup);
++void stage_layout_popups(Client *c);
++
++#endif
+diff -ruN '--exclude=build' '--exclude=flake.lock' a/include/mango/manage/client.h b/include/mango/manage/client.h
+--- a/include/mango/manage/client.h	1970-01-01 01:00:01.000000000 +0100
++++ b/include/mango/manage/client.h	2026-09-26 15:22:11.035060782 +0200
+@@ -225,6 +225,14 @@
+ 	Client *group_prev;
+ 	Client *group_next;
+ 	bool isgroupfocusing;
++	/* Stage layout: stashed at stage_lw x stage_lh, shown scaled on a card. */
++	bool isstaged;
++	int32_t stage_lw, stage_lh;
++	float stage_scale;
++	struct wl_list stage_popups;
++	/* Card mapping from surface-local to card coordinates. */
++	float card_scale_x, card_scale_y;
++	int32_t card_clip_x, card_clip_y;
+ };
+ 
+ void client_update_geometry(Client *c);
+diff -ruN '--exclude=build' '--exclude=flake.lock' a/include/mango/manage/layer.h b/include/mango/manage/layer.h
+--- a/include/mango/manage/layer.h	1970-01-01 01:00:01.000000000 +0100
++++ b/include/mango/manage/layer.h	2026-09-26 15:10:22.433989999 +0200
+@@ -47,6 +47,11 @@
+ 	struct wl_listener destroy;
+ 	struct wl_listener commit;
+ 	struct wl_listener reposition;
++	/* Stage: direct popups of a stashed window, on their own carrier node. */
++	Client *stage_client;
++	struct wlr_scene_tree *stage_carrier;
++	struct wl_list stage_link;
++	struct wl_listener stage_commit;
+ } Popup;
+ 
+ void arrange_layer(Monitor *m, struct wl_list *list,
+diff -ruN '--exclude=build' '--exclude=flake.lock' a/include/mango/overview/overview.h b/include/mango/overview/overview.h
+--- a/include/mango/overview/overview.h	1970-01-01 01:00:01.000000000 +0100
++++ b/include/mango/overview/overview.h	2026-09-26 15:07:02.451645366 +0200
+@@ -23,6 +23,12 @@
+ // Creates a card scene_surface node for every surface (including subsurfaces).
+ void overview_card_surface_add(struct wlr_surface *surface, int sx, int sy,
+ 							   void *data);
++// Card buffers hit-test in scaled space; maps back to surface-local coords.
++bool card_buffer_point_accepts_input(struct wlr_scene_buffer *buffer,
++									 double *sx, double *sy);
++// Same mapping for a layout point, used by pointer grabs.
++bool card_surface_coords(Client *c, struct wlr_surface *s, double lx,
++						 double ly, double *sx, double *sy);
+ // Updates card position and scale from the current geometry; content origin
+ // uses client_get_clip geometry offset.
+ void overview_layout_card(Client *c);
+diff -ruN '--exclude=build' '--exclude=flake.lock' a/src/animation/client.c b/src/animation/client.c
+--- a/src/animation/client.c	1970-01-01 01:00:01.000000000 +0100
++++ b/src/animation/client.c	2026-09-26 15:22:11.038064493 +0200
+@@ -1516,7 +1516,7 @@
+ 	}
+ 
+ 	if (!c->isnosizehint && !c->ismaximizescreen && !c->isfullscreen &&
+-		c->isfloating)
++		c->isfloating && !c->isstaged)
+ 		client_set_size_bound(c);
+ 
+ 	if (!c->is_pending_open_animation)
+@@ -1561,9 +1561,12 @@
+ 		c->fake_no_border = true;
+ 	}
+ 
+-	if (!c->mon->isoverview)
+-		c->configure_serial = client_set_size(c, c->geom.width - 2 * c->bw,
+-											  c->geom.height - 2 * c->bw);
++	if (!c->mon->isoverview) {
++		int32_t cw, ch;
++		stage_sync_logical(c);
++		stage_content_size(c, &cw, &ch);
++		c->configure_serial = client_set_size(c, cw, ch);
++	}
+ 
+ 	if (c->configure_serial != 0)
+ 		c->mon->resizing_count_pending++;
+diff -ruN '--exclude=build' '--exclude=flake.lock' a/src/animation/tag.c b/src/animation/tag.c
+--- a/src/animation/tag.c	1970-01-01 01:00:01.000000000 +0100
++++ b/src/animation/tag.c	2026-09-26 15:11:31.600702451 +0200
+@@ -167,7 +167,7 @@
+ void set_arrange_hidden(Monitor *m, Client *c, bool want_animation) {
+ 	/* In overview every tag window must show its card and must not be disabled
+ 	 * by the hiding logic. */
+-	if (c->ov_card_tree) {
++	if (c->ov_card_tree && m->isoverview) {
+ 		c->is_clip_to_hide = false;
+ 		wlr_scene_node_set_enabled(&c->scene->node, true);
+ 		c->animation.running = false;
+diff -ruN '--exclude=build' '--exclude=flake.lock' a/src/input/pointer.c b/src/input/pointer.c
+--- a/src/input/pointer.c	1970-01-01 01:00:01.000000000 +0100
++++ b/src/input/pointer.c	2026-09-26 15:12:08.352764937 +0200
+@@ -12,6 +12,7 @@
+ #include "mango/layout/dwindle.h"
+ #include "mango/layout/layout.h"
+ #include "mango/layout/scroll.h"
++#include "mango/overview/overview.h"
+ #include "mango/manage/client.h"
+ #include "mango/manage/layer.h"
+ #include "mango/manage/misc.h"
+@@ -804,7 +805,9 @@
+ 
+ 	server.grab_client = gc;
+ 
+-	if (gc->isfloating == 0 && mode == CurMove) {
++	if (mode == CurMove && stage_begin_move(gc, x, y)) {
++		/* Stage stashes the window and sizes it itself. */
++	} else if (gc->isfloating == 0 && mode == CurMove) {
+ 		gc->drag_to_tile = true;
+ 		exit_scroller_stack(gc);
+ 		client_set_floating(gc, 1);
+@@ -815,7 +818,7 @@
+ 	}
+ 
+ 	if (gc->drag_to_tile && config.drag_tile_to_tile &&
+-		config.drag_tile_small) {
++		config.drag_tile_small && !gc->isstaged) {
+ 		gc->geom.x = (int32_t)round(x) - 150;
+ 		gc->geom.y = (int32_t)round(y) - 150;
+ 		gc->geom.width = 300;
+@@ -908,7 +911,9 @@
+ 	server.grab_client = NULL;
+ 	server.start_drag_window = false;
+ 	server.last_apply_drag_time = 0;
+-	if (gc->drag_to_tile && config.drag_tile_to_tile) {
++	if (stage_drop(gc)) {
++		/* Placed by the stage layout. */
++	} else if (gc->drag_to_tile && config.drag_tile_to_tile) {
+ 		pointer_place_drag_tile(gc);
+ 		gc->float_geom = gc->drag_tile_float_backup_geom;
+ 	} else {
+@@ -1004,6 +1009,9 @@
+ 		surface = server.seat->pointer_state.focused_surface;
+ 		sx = server.cursor->x - (l ? l->scene->node.x : w->geom.x);
+ 		sy = server.cursor->y - (l ? l->scene->node.y : w->geom.y);
++		if (w && w->ov_card_tree)
++			card_surface_coords(w, surface, server.cursor->x,
++								server.cursor->y, &sx, &sy);
+ 	}
+ 
+ 	/* Update drag icon's position */
+@@ -1020,6 +1028,7 @@
+ 			.y = (int32_t)round(server.cursor->y) - server.grab_offset_y,
+ 			.width = server.grab_client->geom.width,
+ 			.height = server.grab_client->geom.height};
++		stage_drag_motion(server.grab_client, time);
+ 		if (config.drag_tile_to_tile && server.grab_client->drag_to_tile) {
+ 			closet_drop_client = find_closest_tiled_client(server.grab_client);
+ 			if (closet_drop_client && server.drop_client &&
+@@ -1297,6 +1306,9 @@
+ 	long min_dist = LONG_MAX;
+ 	Monitor *cursor_mon = monitor_at_point(server.cursor->x, server.cursor->y);
+ 
++	if (is_stage_layout(cursor_mon))
++		return stage_tile_at_cursor(cursor_mon, c);
++
+ 	wl_list_for_each(tc, &server.clients, link) {
+ 		if (tc == c || !ISTILED(tc) || !VISIBLEON(tc, cursor_mon))
+ 			continue;
+diff -ruN '--exclude=build' '--exclude=flake.lock' a/src/layout/arrange.c b/src/layout/arrange.c
+--- a/src/layout/arrange.c	1970-01-01 01:00:01.000000000 +0100
++++ b/src/layout/arrange.c	2026-09-26 15:10:29.167157840 +0200
+@@ -1412,6 +1412,7 @@
+ 	{"DW", dwindle, "dwindle", DWINDLE},
+ 	{"F", fair, "fair", FAIR},
+ 	{"VF", vertical_fair, "vertical_fair", VERTICAL_FAIR},
++	{"ST", stage, "stage", STAGE},
+ };
+ 
+ bool special_handle_empty_view(Monitor *m, bool from_view) {
+@@ -1448,6 +1449,9 @@
+ 	if (special_handle_empty_view(m, from_view))
+ 		return;
+ 
++	if (!m->isoverview && !is_stage_layout(m))
++		stage_release_all(m);
++
+ 	pre_calculate_before_arrange(m, want_animation, from_view, false);
+ 
+ 	bool is_tag0 = is_special_active(m);
+diff -ruN '--exclude=build' '--exclude=flake.lock' a/src/layout/stage.c b/src/layout/stage.c
+--- a/src/layout/stage.c	1970-01-01 01:00:00.000000000 +0100
++++ b/src/layout/stage.c	2026-09-26 15:26:58.478748983 +0200
+@@ -0,0 +1,675 @@
++#include "mango/layout/stage.h"
++#include "mango/animation/client.h"
++#include "mango/common/server.h"
++#include "mango/common/util.h"
++#include "mango/layout/arrange.h"
++#include "mango/layout/layout.h"
++#include "mango/manage/client.h"
++#include "mango/manage/layer.h"
++#include "mango/manage/monitor.h"
++#include "mango/overview/overview.h"
++#include <math.h>
++#include <stdlib.h>
++#include <string.h>
++#include <wlr/types/wlr_cursor.h>
++#include <wlr/types/wlr_xdg_shell.h>
++#include <wlr/util/edges.h>
++
++#define STAGE_CENTER_MAX 4
++// Scale right next to the center square and at the monitor edge.
++#define STAGE_SCALE_MAX 0.6f
++#define STAGE_SCALE_MIN 0.25f
++// A shake is this many direction flips, each at least this far, this fast.
++#define STAGE_SHAKE_FLIPS 4
++#define STAGE_SHAKE_TRAVEL 40.0
++#define STAGE_SHAKE_WINDOW_MS 800
++
++static struct {
++	Client *c;
++	double ext;
++	int32_t dir;
++	uint32_t flips[STAGE_SHAKE_FLIPS];
++	int32_t nflips;
++	bool fired;
++} shake;
++
++// Drag state that must outlive the begin-move call.
++static struct {
++	Client *c;
++	bool was_staged;
++	struct wlr_box origin;
++} drag;
++
++bool is_stage_layout(Monitor *m) {
++	return m && !m->isoverview &&
++		   m->pertag->ltidxs[get_mon_curtag(m)]->id == STAGE;
++}
++
++// As wide as the monitor is tall, so it lines up with a bar sized the same way.
++static struct wlr_box stage_center_box(Monitor *m) {
++	int32_t side = MANGO_MIN(m->m.height, m->w.width);
++	return (struct wlr_box){
++		.x = m->m.x + (m->m.width - side) / 2,
++		.y = m->w.y,
++		.width = side,
++		.height = m->w.height,
++	};
++}
++
++static bool stage_in_center(Monitor *m, double x, double y) {
++	struct wlr_box s = stage_center_box(m);
++	return wlr_box_contains_point(&s, x, y);
++}
++
++static float stage_scale_at(Monitor *m, double x) {
++	struct wlr_box s = stage_center_box(m);
++	double t = 0;
++	if (x < s.x && s.x > m->m.x)
++		t = (s.x - x) / (double)(s.x - m->m.x);
++	else if (x > s.x + s.width && m->m.x + m->m.width > s.x + s.width)
++		t = (x - (s.x + s.width)) /
++			(double)(m->m.x + m->m.width - (s.x + s.width));
++	t = MANGO_MAX(0.0, MANGO_MIN(1.0, t));
++	return STAGE_SCALE_MAX - (STAGE_SCALE_MAX - STAGE_SCALE_MIN) * (float)t;
++}
++
++void stage_content_size(Client *c, int32_t *w, int32_t *h) {
++	if (c->isstaged && c->stage_lw > 0 && c->stage_lh > 0) {
++		*w = c->stage_lw;
++		*h = c->stage_lh;
++		return;
++	}
++	*w = c->geom.width - 2 * (int32_t)c->bw;
++	*h = c->geom.height - 2 * (int32_t)c->bw;
++}
++
++static struct wlr_box stage_box_at(Client *c, double cx, double cy, float s) {
++	int32_t w = (int32_t)roundf(c->stage_lw * s) + 2 * (int32_t)c->bw;
++	int32_t h = (int32_t)roundf(c->stage_lh * s) + 2 * (int32_t)c->bw;
++	return (struct wlr_box){
++		.x = (int32_t)round(cx - w / 2.0),
++		.y = (int32_t)round(cy - h / 2.0),
++		.width = w,
++		.height = h,
++	};
++}
++
++static float stage_current_scale(Client *c) {
++	return c->stage_scale > 0.f ? c->stage_scale : STAGE_SCALE_MAX;
++}
++
++// The box on screen is logical size times scale. Box changes that did not come
++// from a scale change (resize grabs, keyboard resizes) resize the client.
++void stage_sync_logical(Client *c) {
++	if (!c->isstaged || c->stage_scale <= 0.f)
++		return;
++	int32_t bw2 = 2 * (int32_t)c->bw;
++	int32_t lw = (int32_t)roundf((c->geom.width - bw2) / c->stage_scale);
++	int32_t lh = (int32_t)roundf((c->geom.height - bw2) / c->stage_scale);
++	// Rounding from scaled boxes is not a resize.
++	if (abs(lw - c->stage_lw) > 2)
++		c->stage_lw = lw;
++	if (abs(lh - c->stage_lh) > 2)
++		c->stage_lh = lh;
++}
++
++// Popups are anchored to content that is about to change scale; closing them
++// matches what toolkits do when their window moves.
++static void stage_close_popups(Client *c) {
++	if (client_is_x11(c))
++		return;
++	struct wlr_xdg_popup *popup, *tmp;
++	wl_list_for_each_safe(popup, tmp, &c->surface.xdg->popups, link)
++		wlr_xdg_popup_destroy(popup);
++}
++
++static void stage_client(Client *c, struct wlr_box box) {
++	if (!c->isstaged) {
++		struct wlr_box content;
++		client_get_geometry(c, &content);
++		if (content.width <= 0 || content.height <= 0)
++			stage_content_size(c, &content.width, &content.height);
++
++		stage_close_popups(c);
++		if (!c->stage_popups.prev)
++			wl_list_init(&c->stage_popups);
++		c->stage_lw = content.width;
++		c->stage_lh = content.height;
++		c->isstaged = true;
++		c->isfloating = 1;
++		c->iscustomsize = 1;
++		client_set_tiled(c, WLR_EDGE_NONE);
++		overview_backup_surface(c);
++	}
++	if (c->stage_lw > 0)
++		c->stage_scale =
++			(float)(box.width - 2 * (int32_t)c->bw) / (float)c->stage_lw;
++	c->float_geom = box;
++	resize(c, box, 0);
++}
++
++static void unstage_client(Client *c) {
++	if (!c->isstaged)
++		return;
++	stage_close_popups(c);
++	c->isstaged = false;
++	c->isfloating = 0;
++	if (!c->mon || !c->mon->isoverview) {
++		overview_destroy_card(c);
++		if (c->overview_scene_surface) {
++			c->scene_surface = c->overview_scene_surface;
++			c->overview_scene_surface = NULL;
++			wlr_scene_node_set_enabled(&c->scene_surface->node, true);
++		}
++	}
++	client_set_tiled(c, WLR_EDGE_TOP | WLR_EDGE_BOTTOM | WLR_EDGE_LEFT |
++							WLR_EDGE_RIGHT);
++}
++
++void stage_adopt_size(Client *c, int32_t w, int32_t h) {
++	if (!c->isstaged || w <= 0 || h <= 0 ||
++		(w == c->stage_lw && h == c->stage_lh))
++		return;
++	float s = stage_current_scale(c);
++	c->stage_lw = w;
++	c->stage_lh = h;
++	struct wlr_box box =
++		stage_box_at(c, c->geom.x + c->geom.width / 2.0,
++					 c->geom.y + c->geom.height / 2.0, s);
++	if (c == server.grab_client) {
++		server.grab_client->float_geom = box;
++		return;
++	}
++	c->float_geom = box;
++	resize(c, box, 0);
++}
++
++void stage_release_all(Monitor *m) {
++	Client *c;
++	wl_list_for_each(c, &server.clients, link) {
++		if (c->isstaged && VISIBLEON(c, m))
++			unstage_client(c);
++	}
++}
++
++static int32_t stage_center_count(Monitor *m, Client *skip) {
++	Client *c;
++	int32_t n = 0;
++	wl_list_for_each(c, &server.clients, link) {
++		if (c != skip && VISIBLEON(c, m) && ISTILED(c))
++			n++;
++	}
++	return n;
++}
++
++Client *stage_tile_at_cursor(Monitor *m, Client *skip) {
++	Client *c;
++	if (!stage_in_center(m, server.cursor->x, server.cursor->y))
++		return NULL;
++	wl_list_for_each(c, &server.clients, link) {
++		if (c != skip && VISIBLEON(c, m) && ISTILED(c) &&
++			wlr_box_contains_point(&c->geom, server.cursor->x,
++								   server.cursor->y))
++			return c;
++	}
++	return NULL;
++}
++
++// Side a stashed window belongs to: where it sits, or the emptier side while it
++// is still inside the center square.
++static bool stage_on_left(Monitor *m, Client *c, int32_t nleft,
++						  int32_t nright) {
++	struct wlr_box s = stage_center_box(m);
++	double cx = c->geom.x + c->geom.width / 2.0;
++	if (cx < s.x)
++		return true;
++	if (cx > s.x + s.width)
++		return false;
++	return nleft <= nright;
++}
++
++// Fits a column of stashed windows against the square's edge, one slot each.
++static void stage_align_column(Monitor *m, Client **list, int32_t k,
++							   bool left) {
++	struct wlr_box s = stage_center_box(m);
++	int32_t gap = server.enable_gaps ? m->gappih : 0;
++	int32_t outer = server.enable_gaps ? m->gappoh : 0;
++	int32_t col_w = left ? s.x - m->w.x - gap - outer
++						 : m->w.x + m->w.width - (s.x + s.width) - gap - outer;
++	int32_t top = m->w.y + (server.enable_gaps ? m->gappov : 0);
++	int32_t avail_h = m->w.height - 2 * (top - m->w.y);
++	if (k <= 0 || col_w <= 0)
++		return;
++	int32_t slot_h = (avail_h - (k - 1) * gap) / k;
++
++	for (int32_t i = 0; i < k; i++) {
++		Client *c = list[i];
++		int32_t bw2 = 2 * (int32_t)c->bw;
++		float sw = (float)(col_w - bw2) / c->stage_lw;
++		float sh = (float)(slot_h - bw2) / c->stage_lh;
++		float sc = MANGO_MIN(STAGE_SCALE_MAX, MANGO_MIN(sw, sh));
++		int32_t w = (int32_t)roundf(c->stage_lw * sc) + bw2;
++		int32_t h = (int32_t)roundf(c->stage_lh * sc) + bw2;
++		struct wlr_box box = {
++			.x = left ? s.x - gap - w : s.x + s.width + gap,
++			.y = top + i * (slot_h + gap) + (slot_h - h) / 2,
++			.width = w,
++			.height = h,
++		};
++		stage_client(c, box);
++	}
++}
++
++static int cmp_center_y(const void *a, const void *b) {
++	const Client *ca = *(Client *const *)a, *cb = *(Client *const *)b;
++	int32_t ya = ca->geom.y + ca->geom.height / 2;
++	int32_t yb = cb->geom.y + cb->geom.height / 2;
++	return (ya > yb) - (ya < yb);
++}
++
++// Lines every stashed window up in two tidy columns, one per side.
++static void stage_align_sides(Monitor *m, Client *skip) {
++	Client *c;
++	int32_t n = 0, nl = 0, nr = 0;
++	wl_list_for_each(c, &server.clients, link) {
++		if (c != skip && c->isstaged && VISIBLEON(c, m))
++			n++;
++	}
++	if (n == 0)
++		return;
++
++	Client **left = ecalloc(n, sizeof(*left));
++	Client **right = ecalloc(n, sizeof(*right));
++	wl_list_for_each(c, &server.clients, link) {
++		if (c == skip || !c->isstaged || !VISIBLEON(c, m))
++			continue;
++		if (stage_on_left(m, c, nl, nr))
++			left[nl++] = c;
++		else
++			right[nr++] = c;
++	}
++	qsort(left, nl, sizeof(*left), cmp_center_y);
++	qsort(right, nr, sizeof(*right), cmp_center_y);
++	stage_align_column(m, left, nl, true);
++	stage_align_column(m, right, nr, false);
++	free(left);
++	free(right);
++}
++
++// Stashes a window without disturbing the ones already on the sides: below the
++// last one on the emptier side, against the square's edge.
++static void stage_stash_free(Monitor *m, Client *c) {
++	struct wlr_box s = stage_center_box(m);
++	int32_t gap = server.enable_gaps ? m->gappih : 0;
++	int32_t top = m->w.y + (server.enable_gaps ? m->gappov : 0);
++	int32_t nl = 0, nr = 0, bottom_l = top, bottom_r = top;
++	Client *o;
++
++	wl_list_for_each(o, &server.clients, link) {
++		if (o == c || !o->isstaged || !VISIBLEON(o, m))
++			continue;
++		if (o->geom.x + o->geom.width / 2 < s.x) {
++			nl++;
++			bottom_l = MANGO_MAX(bottom_l, o->geom.y + o->geom.height + gap);
++		} else {
++			nr++;
++			bottom_r = MANGO_MAX(bottom_r, o->geom.y + o->geom.height + gap);
++		}
++	}
++
++	bool left = nl <= nr;
++	int32_t side_w = left ? s.x - m->w.x : m->w.x + m->w.width - (s.x + s.width);
++	int32_t bw2 = 2 * (int32_t)c->bw;
++	int32_t lw = c->isstaged ? c->stage_lw : c->geom.width - bw2;
++	int32_t lh = c->isstaged ? c->stage_lh : c->geom.height - bw2;
++	if (lw <= 0 || lh <= 0)
++		return;
++	float sc = MANGO_MIN(STAGE_SCALE_MAX, (float)(side_w - 2 * gap - bw2) / lw);
++	int32_t w = (int32_t)roundf(lw * sc) + bw2;
++	int32_t h = (int32_t)roundf(lh * sc) + bw2;
++	int32_t y = left ? bottom_l : bottom_r;
++	if (y + h > m->w.y + m->w.height)
++		y = top;
++
++	stage_client(c, (struct wlr_box){
++						.x = left ? s.x - gap - w : s.x + s.width + gap,
++						.y = y,
++						.width = w,
++						.height = h,
++					});
++}
++
++static void stage_tile(Monitor *m, Client **tiles, int32_t n) {
++	struct wlr_box s = stage_center_box(m);
++	int32_t gi = server.enable_gaps ? m->gappih : 0;
++	int32_t go_h = server.enable_gaps ? m->gappoh : 0;
++	int32_t go_v = server.enable_gaps ? m->gappov : 0;
++	struct wlr_box in = {
++		.x = s.x + go_h,
++		.y = s.y + go_v,
++		.width = s.width - 2 * go_h,
++		.height = s.height - 2 * go_v,
++	};
++	int32_t half_w = (in.width - gi) / 2;
++	int32_t half_h = (in.height - gi) / 2;
++	struct wlr_box left = {in.x, in.y, half_w, in.height};
++	struct wlr_box right = {in.x + half_w + gi, in.y, in.width - half_w - gi,
++							in.height};
++	struct wlr_box boxes[STAGE_CENTER_MAX];
++
++	switch (n) {
++	case 1:
++		boxes[0] = in;
++		break;
++	case 2:
++		boxes[0] = left;
++		boxes[1] = right;
++		break;
++	case 3:
++		boxes[0] = left;
++		boxes[1] = (struct wlr_box){right.x, in.y, right.width, half_h};
++		boxes[2] = (struct wlr_box){right.x, in.y + half_h + gi, right.width,
++									in.height - half_h - gi};
++		break;
++	default:
++		boxes[0] = (struct wlr_box){left.x, in.y, left.width, half_h};
++		boxes[1] = (struct wlr_box){right.x, in.y, right.width, half_h};
++		boxes[2] = (struct wlr_box){left.x, in.y + half_h + gi, left.width,
++									in.height - half_h - gi};
++		boxes[3] = (struct wlr_box){right.x, in.y + half_h + gi, right.width,
++									in.height - half_h - gi};
++		break;
++	}
++
++	for (int32_t i = 0; i < n; i++)
++		client_tile_resize(tiles[i], boxes[i], 0);
++}
++
++void stage(Monitor *m) {
++	Client *c, *tiles[STAGE_CENTER_MAX];
++	int32_t n = 0;
++
++	wl_list_for_each(c, &server.clients, link) {
++		if (!VISIBLEON(c, m) || c->iskilling)
++			continue;
++		if (c->isstaged) {
++			// Leaving overview drops the card; stashed windows need it back.
++			if (!c->ov_card_tree && client_surface(c)->mapped)
++				overview_backup_surface(c);
++			continue;
++		}
++		if (!ISTILED(c))
++			continue;
++		if (n < STAGE_CENTER_MAX)
++			tiles[n++] = c;
++		else
++			stage_stash_free(m, c);
++	}
++
++	if (n > 0)
++		stage_tile(m, tiles, n);
++}
++
++static void shake_reset(Client *c) {
++	shake.c = c;
++	shake.ext = server.cursor->x;
++	shake.dir = 0;
++	shake.nflips = 0;
++	shake.fired = false;
++}
++
++// Shaking the dragged window pushes everything else out to tidy side columns.
++static void stage_shake(Monitor *m, Client *grabbed) {
++	Client *c;
++	wl_list_for_each(c, &server.clients, link) {
++		if (c != grabbed && VISIBLEON(c, m) && ISTILED(c))
++			stage_client(c, c->geom);
++	}
++	stage_align_sides(m, grabbed);
++	arrange(m, false, false);
++}
++
++static void stage_track_shake(Client *c, uint32_t time) {
++	double x = server.cursor->x;
++	if (shake.c != c)
++		shake_reset(c);
++	if (shake.fired || time == 0)
++		return;
++
++	if (shake.dir == 0) {
++		if (fabs(x - shake.ext) >= STAGE_SHAKE_TRAVEL) {
++			shake.dir = x > shake.ext ? 1 : -1;
++			shake.ext = x;
++		}
++		return;
++	}
++	if ((x - shake.ext) * shake.dir > 0) {
++		shake.ext = x;
++		return;
++	}
++	if ((shake.ext - x) * shake.dir < STAGE_SHAKE_TRAVEL)
++		return;
++
++	shake.dir = -shake.dir;
++	shake.ext = x;
++	memmove(shake.flips, shake.flips + 1,
++			sizeof(shake.flips[0]) * (STAGE_SHAKE_FLIPS - 1));
++	shake.flips[STAGE_SHAKE_FLIPS - 1] = time;
++	if (shake.nflips < STAGE_SHAKE_FLIPS)
++		shake.nflips++;
++
++	if (shake.nflips == STAGE_SHAKE_FLIPS &&
++		time - shake.flips[0] <= STAGE_SHAKE_WINDOW_MS) {
++		Monitor *m = monitor_at_point(server.cursor->x, server.cursor->y);
++		if (is_stage_layout(m)) {
++			shake.fired = true;
++			stage_shake(m, c);
++		}
++	}
++}
++
++bool stage_begin_move(Client *c, double x, double y) {
++	// Recorded for every move: a tile from another monitor may land here.
++	drag.c = c;
++	drag.was_staged = c->isstaged;
++	drag.origin = c->geom;
++
++	if (!is_stage_layout(c->mon))
++		return false;
++	if (!c->isstaged && !ISTILED(c))
++		return false;
++
++	shake_reset(c);
++
++	if (!c->isstaged) {
++		float rx = (float)(x - c->geom.x) / c->geom.width;
++		float ry = (float)(y - c->geom.y) / c->geom.height;
++		stage_client(c, c->geom);
++		struct wlr_box box = stage_box_at(c, 0, 0, STAGE_SCALE_MAX);
++		box.x = (int32_t)round(x - rx * box.width);
++		box.y = (int32_t)round(y - ry * box.height);
++		stage_client(c, box);
++		arrange(c->mon, false, false);
++	}
++	// Lets the regular drag code draw drop hints over center tiles.
++	c->drag_to_tile = true;
++	return true;
++}
++
++void stage_drag_motion(Client *c, uint32_t time) {
++	if (!c->isstaged)
++		return;
++	Monitor *m = monitor_at_point(server.cursor->x, server.cursor->y);
++	if (!is_stage_layout(m))
++		return;
++
++	stage_track_shake(c, time);
++
++	// Scale changes only the box on screen, so the client never re-renders.
++	float s = stage_scale_at(m, server.cursor->x);
++	c->stage_scale = s;
++	struct wlr_box old = c->geom;
++	struct wlr_box box = stage_box_at(c, 0, 0, s);
++	double rx = old.width > 0 ? (double)server.grab_offset_x / old.width : 0.5;
++	double ry = old.height > 0 ? (double)server.grab_offset_y / old.height : 0.5;
++	server.grab_offset_x = (int32_t)round(rx * box.width);
++	server.grab_offset_y = (int32_t)round(ry * box.height);
++	box.x = (int32_t)round(server.cursor->x) - server.grab_offset_x;
++	box.y = (int32_t)round(server.cursor->y) - server.grab_offset_y;
++	c->float_geom = box;
++}
++
++bool stage_drop(Client *c) {
++	Monitor *m = c->mon;
++	bool ours = drag.c == c;
++	drag.c = NULL;
++	shake.c = NULL;
++
++	if (!is_stage_layout(m)) {
++		if (!c->isstaged)
++			return false;
++		// Dropped on a monitor without the stage: join its tiling.
++		unstage_client(c);
++		c->drag_to_tile = true;
++		arrange(m, false, false);
++		return false;
++	}
++	if (!c->isstaged) {
++		if (!ours || !c->drag_to_tile ||
++			stage_in_center(m, server.cursor->x, server.cursor->y))
++			return false;
++		// A tile dragged in from another monitor stashes where it lands, at the
++		// size it had there.
++		c->drag_to_tile = false;
++		stage_client(c, c->geom);
++		c->stage_lw = drag.origin.width - 2 * (int32_t)c->bw;
++		c->stage_lh = drag.origin.height - 2 * (int32_t)c->bw;
++		stage_client(c, stage_box_at(c, server.cursor->x, server.cursor->y,
++									 stage_scale_at(m, server.cursor->x)));
++		arrange(m, false, false);
++		return true;
++	}
++
++	c->drag_to_tile = false;
++	if (!stage_in_center(m, server.cursor->x, server.cursor->y)) {
++		arrange(m, false, false);
++		return true;
++	}
++
++	Client *target = stage_tile_at_cursor(m, c);
++	int32_t n = stage_center_count(m, c);
++
++	if (n >= STAGE_CENTER_MAX && !target) {
++		// Full center and no tile under the cursor (a gap): back to the side.
++		if (ours && drag.was_staged)
++			stage_client(c, drag.origin);
++		else
++			stage_stash_free(m, c);
++		arrange(m, false, false);
++		return true;
++	}
++
++	unstage_client(c);
++	if (target) {
++		if (target->drop_direction == RIGHT || target->drop_direction == DOWN)
++			wl_list_safe_reinsert_next(&target->link, &c->link);
++		else
++			wl_list_safe_reinsert_prev(&target->link, &c->link);
++	}
++
++	if (n >= STAGE_CENTER_MAX) {
++		// Swap: the tile it landed on takes the dropped window's old spot.
++		if (ours && drag.was_staged) {
++			float s = stage_scale_at(m, drag.origin.x + drag.origin.width / 2.0);
++			stage_client(target, target->geom);
++			stage_client(target, stage_box_at(target,
++											  drag.origin.x +
++												  drag.origin.width / 2.0,
++											  drag.origin.y +
++												  drag.origin.height / 2.0,
++											  s));
++		} else {
++			stage_stash_free(m, target);
++		}
++	}
++
++	arrange(m, false, false);
++	return true;
++}
++
++static void stage_popup_handle_commit(struct wl_listener *listener,
++									  void *data) {
++	Popup *popup = wl_container_of(listener, popup, stage_commit);
++	if (popup->stage_client)
++		stage_layout_popups(popup->stage_client);
++}
++
++// Parents direct popups of a stashed window to their own node so they escape
++// the hidden real surface tree and can follow the scaled card.
++bool stage_popup_create(Popup *popup) {
++	struct wlr_xdg_popup *wlr_popup = popup->wlr_popup;
++	Client *c = NULL;
++	if (!wlr_popup->parent ||
++		toplevel_from_wlr_surface(wlr_popup->parent, &c, NULL) < 0 || !c ||
++		!c->isstaged || client_is_x11(c) ||
++		wlr_popup->parent != client_surface(c))
++		return false;
++
++	popup->stage_client = c;
++	popup->stage_carrier = wlr_scene_tree_create(c->scene);
++	wlr_popup->base->surface->data =
++		wlr_scene_xdg_surface_create(popup->stage_carrier, wlr_popup->base);
++	wl_list_insert(&c->stage_popups, &popup->stage_link);
++	popup->stage_commit.notify = stage_popup_handle_commit;
++	wl_signal_add(&wlr_popup->base->surface->events.commit,
++				  &popup->stage_commit);
++	stage_layout_popups(c);
++	return true;
++}
++
++void stage_popup_destroy(Popup *popup) {
++	if (!popup->stage_client)
++		return;
++	wl_list_remove(&popup->stage_link);
++	wl_list_remove(&popup->stage_commit.link);
++	wlr_scene_node_destroy(&popup->stage_carrier->node);
++	popup->stage_client = NULL;
++}
++
++void stage_layout_popups(Client *c) {
++	if (!c->isstaged || !c->stage_popups.prev || !c->mon)
++		return;
++
++	Popup *popup;
++	wl_list_for_each(popup, &c->stage_popups, stage_link) {
++		struct wlr_box g = popup->wlr_popup->current.geometry;
++		// Anchor point on the scaled content, relative to the client node.
++		int32_t ax = (int32_t)c->bw +
++					 (int32_t)roundf((g.x - c->card_clip_x) * c->card_scale_x);
++		int32_t ay = (int32_t)c->bw +
++					 (int32_t)roundf((g.y - c->card_clip_y) * c->card_scale_y);
++
++		// Slide back onto the usable area instead of flipping.
++		int32_t lx = c->animation.current.x + ax;
++		int32_t ly = c->animation.current.y + ay;
++		struct wlr_box *u = &c->mon->w;
++		if (lx + g.width > u->x + u->width)
++			ax -= lx + g.width - (u->x + u->width);
++		if (ly + g.height > u->y + u->height)
++			ay -= ly + g.height - (u->y + u->height);
++		if (lx < u->x)
++			ax += u->x - lx;
++		if (ly < u->y)
++			ay += u->y - ly;
++
++		// wlroots places the popup tree at g inside the carrier.
++		wlr_scene_node_set_position(&popup->stage_carrier->node, ax - g.x,
++									ay - g.y);
++		wlr_scene_node_raise_to_top(&popup->stage_carrier->node);
++	}
++}
++
++// Fullscreen and maximize pull a stashed window back to normal first.
++void stage_release(Client *c) {
++	unstage_client(c);
++}
+diff -ruN '--exclude=build' '--exclude=flake.lock' a/src/manage/client.c b/src/manage/client.c
+--- a/src/manage/client.c	1970-01-01 01:00:01.000000000 +0100
++++ b/src/manage/client.c	2026-09-26 15:26:08.108016104 +0200
+@@ -2178,9 +2178,10 @@
+ 
+ static bool client_xdg_size_pending(Client *c) {
+ 	struct wlr_xdg_toplevel_state *state = &c->surface.xdg->toplevel->current;
++	int32_t w, h;
+ 
+-	return state->width != (int32_t)(c->geom.width - 2 * (int32_t)c->bw) ||
+-		   state->height != (int32_t)(c->geom.height - 2 * (int32_t)c->bw);
++	stage_content_size(c, &w, &h);
++	return state->width != w || state->height != h;
+ }
+ 
+ void handle_client_commit(struct wl_listener *listener, void *data) {
+@@ -2238,6 +2239,11 @@
+ 		c->configure_serial <= c->surface.xdg->current.configure_serial)
+ 		c->configure_serial = 0;
+ 
++	/* A stashed client that settled on another size (min size) keeps it. */
++	if (c->isstaged && !c->configure_serial)
++		stage_adopt_size(c, c->surface.xdg->geometry.width,
++						 c->surface.xdg->geometry.height);
++
+ 	if (!c->dirty) {
+ 		new_geo = &c->surface.xdg->geometry;
+ 		/* Only re-run resize() while the client has not adopted the size we
+@@ -3131,6 +3137,9 @@
+ 	if (c->mon->isoverview)
+ 		return;
+ 
++	if (fullscreen)
++		stage_release(c);
++
+ 	c->isfullscreen = fullscreen;
+ 
+ 	client_set_fullscreen(c, fullscreen);
+@@ -3186,6 +3195,9 @@
+ 	if (c->mon->isoverview)
+ 		return;
+ 
++	if (maximizescreen)
++		stage_release(c);
++
+ 	client_pending_maximized_state(c, maximizescreen);
+ 
+ 	if (maximizescreen) {
+@@ -4246,8 +4258,7 @@
+ 		 * logical geometry -> physical coordinates, X11 renders 1:1. */
+ 		xgeo->x = c->geom.x + (int32_t)c->bw;
+ 		xgeo->y = c->geom.y + (int32_t)c->bw;
+-		xgeo->width = c->geom.width - 2 * (int32_t)c->bw;
+-		xgeo->height = c->geom.height - 2 * (int32_t)c->bw;
++		stage_content_size(c, &xgeo->width, &xgeo->height);
+ 		xwayland_logical_to_x11(xgeo, c->xwayland_scale);
+ 	}
+ }
+@@ -4348,6 +4359,11 @@
+ 		return;
+ 	}
+ 
++	if (c->isstaged) {
++		stage_adopt_size(c, new_geo.width, new_geo.height);
++		return;
++	}
++
+ 	if (c->isfloating && c != server.grab_client) {
+ 		new_geo.x = new_geo.x - c->bw;
+ 		new_geo.y = new_geo.y - c->bw;
+diff -ruN '--exclude=build' '--exclude=flake.lock' a/src/manage/layer.c b/src/manage/layer.c
+--- a/src/manage/layer.c	1970-01-01 01:00:01.000000000 +0100
++++ b/src/manage/layer.c	2026-09-26 15:11:36.930793113 +0200
+@@ -7,6 +7,7 @@
+ #include "mango/input/pointer.h"
+ #include "mango/ipc/ipc.h"
+ #include "mango/layout/arrange.h"
++#include "mango/layout/stage.h"
+ #include "mango/manage/client.h"
+ #include "mango/manage/monitor.h"
+ #include <scenefx/types/wlr_scene.h>
+@@ -397,6 +398,7 @@
+ 	Popup *popup = wl_container_of(listener, popup, destroy);
+ 	wl_list_remove(&popup->destroy.link);
+ 	wl_list_remove(&popup->reposition.link);
++	stage_popup_destroy(popup);
+ 	free(popup);
+ }
+ 
+@@ -416,13 +418,14 @@
+ 		goto cleanup_popup_commit;
+ 	}
+ 
+-	wlr_scene_node_raise_to_top(wlr_popup->parent->data);
+-
+-	wlr_popup->base->surface->data =
+-		wlr_scene_xdg_surface_create(wlr_popup->parent->data, wlr_popup->base);
+-
+ 	popup->wlr_popup = wlr_popup;
+ 
++	if (!stage_popup_create(popup)) {
++		wlr_scene_node_raise_to_top(wlr_popup->parent->data);
++		wlr_popup->base->surface->data = wlr_scene_xdg_surface_create(
++			wlr_popup->parent->data, wlr_popup->base);
++	}
++
+ 	should_destroy = popup_unconstrain(popup);
+ 
+ cleanup_popup_commit:
+diff -ruN '--exclude=build' '--exclude=flake.lock' a/src/manage/misc.c b/src/manage/misc.c
+--- a/src/manage/misc.c	1970-01-01 01:00:01.000000000 +0100
++++ b/src/manage/misc.c	2026-09-26 15:18:38.060609688 +0200
+@@ -8,6 +8,7 @@
+ #include "mango/manage/client.h"
+ #include "mango/manage/layer.h"
+ #include "mango/manage/monitor.h"
++#include "mango/overview/overview.h"
+ 
+ #include <ctype.h>
+ #include <drm_fourcc.h>
+@@ -295,6 +296,8 @@
+ 		if (node->type == WLR_SCENE_NODE_RECT) {
+ 			if (c && (c->type == XDGShell || c->type == X11)) {
+ 				surface = client_surface(c);
++				if (c->ov_card_tree && nx && ny)
++					card_surface_coords(c, surface, x, y, nx, ny);
+ 			}
+ 
+ 			if (l && l->type == LayerShell) {
+diff -ruN '--exclude=build' '--exclude=flake.lock' a/src/overview/overview.c b/src/overview/overview.c
+--- a/src/overview/overview.c	1970-01-01 01:00:01.000000000 +0100
++++ b/src/overview/overview.c	2026-09-26 15:07:02.453249445 +0200
+@@ -4,6 +4,7 @@
+ #include "mango/common/util.h"
+ #include "mango/draw/text-node.h"
+ #include "mango/layout/layout.h"
++#include "mango/layout/stage.h"
+ #include "mango/manage/client.h"
+ #include "mango/manage/monitor.h"
+ #include <scenefx/types/wlr_scene.h>
+@@ -64,6 +65,67 @@
+ 	free(entry);
+ }
+ 
++static struct ov_card_surface *card_entry_for_surface(Client *c,
++													  struct wlr_surface *s) {
++	struct ov_card_surface *entry;
++	wl_list_for_each(entry, &c->ov_card_surfaces, link) {
++		if (entry->surface == s)
++			return entry;
++	}
++	return NULL;
++}
++
++// Card buffers show scaled content, so hit tests map the card-local point back
++// to surface-local coordinates before asking the client's input region.
++bool card_buffer_point_accepts_input(struct wlr_scene_buffer *buffer,
++									 double *sx, double *sy) {
++	struct wlr_scene_surface *scene_surface =
++		wlr_scene_surface_try_from_buffer(buffer);
++	Client *c = buffer->node.data;
++	if (!scene_surface || !c || !c->ov_card_tree)
++		return false;
++
++	struct ov_card_surface *entry =
++		card_entry_for_surface(c, scene_surface->surface);
++	if (!entry || c->card_scale_x <= 0.f || c->card_scale_y <= 0.f)
++		return false;
++
++	*sx = (buffer->node.x + *sx) / c->card_scale_x + c->card_clip_x - entry->sx;
++	*sy = (buffer->node.y + *sy) / c->card_scale_y + c->card_clip_y - entry->sy;
++	return wlr_surface_point_accepts_input(scene_surface->surface, *sx, *sy);
++}
++
++// Maps a layout point over a card to coordinates local to one of its surfaces,
++// for input paths that bypass the scene hit test (pointer grabs).
++bool card_surface_coords(Client *c, struct wlr_surface *s, double lx,
++						 double ly, double *sx, double *sy) {
++	struct ov_card_surface *entry = c ? card_entry_for_surface(c, s) : NULL;
++	if (!entry || c->card_scale_x <= 0.f || c->card_scale_y <= 0.f)
++		return false;
++
++	int32_t ox, oy;
++	wlr_scene_node_coords(&c->ov_card_tree->node, &ox, &oy);
++	*sx = (lx - ox) / c->card_scale_x + c->card_clip_x - entry->sx;
++	*sy = (ly - oy) / c->card_scale_y + c->card_clip_y - entry->sy;
++	return true;
++}
++
++static void card_sync_surface(struct wlr_surface *surface, int sx, int sy,
++							  void *data) {
++	Client *c = data;
++	struct ov_card_surface *entry = card_entry_for_surface(c, surface);
++	if (!entry) {
++		overview_card_surface_add(surface, sx, sy, c);
++		entry = card_entry_for_surface(c, surface);
++		if (!entry)
++			return;
++	}
++	entry->sx = sx;
++	entry->sy = sy;
++	// Iteration runs bottom to top, so raising in order restores stacking.
++	wlr_scene_node_raise_to_top(&entry->buffer->node);
++}
++
+ // Creates a card scene_surface node for every surface (including subsurfaces).
+ void overview_card_surface_add(struct wlr_surface *surface, int sx, int sy,
+ 							   void *data) {
+@@ -86,6 +148,7 @@
+ 	entry->buffer = entry->scene_surface->buffer;
+ 	wlr_scene_buffer_set_filter_mode(entry->buffer, WLR_SCALE_FILTER_BILINEAR);
+ 	entry->buffer->node.data = c; /* Hit test. */
++	entry->buffer->point_accepts_input = card_buffer_point_accepts_input;
+ 
+ 	entry->commit.notify = handle_overview_card_surface_commit;
+ 	wl_signal_add(&surface->events.commit, &entry->commit);
+@@ -111,6 +174,10 @@
+ 
+ 	wlr_scene_node_set_position(&c->ov_card_tree->node, bw, bw);
+ 
++	// Staged cards live long enough to see subsurfaces appear and move.
++	if (c->isstaged)
++		wlr_surface_for_each_surface(client_surface(c), card_sync_surface, c);
++
+ 	// Content origin (geometry offset) and card content size.
+ 	struct wlr_box clip;
+ 	client_get_clip(c, &clip);
+@@ -132,6 +199,10 @@
+ 
+ 	float scale_x = (float)w / content_w;
+ 	float scale_y = (float)h / content_h;
++	c->card_scale_x = scale_x;
++	c->card_scale_y = scale_y;
++	c->card_clip_x = clip.x;
++	c->card_clip_y = clip.y;
+ 
+ 	int32_t vx = 0, vy = 0, vw = w, vh = h;
+ 	if (c->mon) {
+@@ -230,6 +301,7 @@
+ 		}
+ 	}
+ 
++	stage_layout_popups(c);
+ 	overview_update_jump_label(c);
+ }
+ 

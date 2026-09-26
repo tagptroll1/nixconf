@@ -20,7 +20,6 @@ Item {
 
   property string omarchyPath: Quickshell.env("OMARCHY_PATH")
   property var shell: null
-  property var manifest: null
 
   property bool opened: false
   property string iface: ""
@@ -89,7 +88,7 @@ Item {
 
   function dismiss() {
     if (root.shell && typeof root.shell.hide === "function")
-      root.shell.hide((root.manifest && root.manifest.id) || "omarchy.wifiqr")
+      root.shell.hide("omarchy.wifiqr")
     else close()
   }
 

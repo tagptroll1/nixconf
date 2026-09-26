@@ -17,9 +17,7 @@ BUDGET=$(( MAX_BYTES * 92 / 100 ))
 BPP=0.045
 
 # 5s notification
-notify() { notify-send -a "Screen recording" -t 5000 "$@"; }
-# custom/screenrecord in waybar listens on SIGRTMIN+8
-refresh_waybar() { pkill -RTMIN+8 waybar || true; }
+notify() { send-notification -t 5000 "$@"; }
 # Evaluate an arithmetic expression, rounded to an integer.
 calc() { awk "BEGIN{ printf \"%.0f\", $* }"; }
 probe() { ffprobe -v error -of default=nw=1:nk=1 "$@"; }
@@ -38,7 +36,7 @@ start() {
   # h264 needs even dimensions; slurp happily returns odd ones.
   w=$((w / 2 * 2))
   h=$((h / 2 * 2))
-  ((w >= 2 && h >= 2)) || { notify -u critical "Selection too small"; exit 1; }
+  ((w >= 2 && h >= 2)) || { notify --type error "Selection too small"; exit 1; }
 
   mkdir -p "$DIR"
   raw="$DIR/recording_$(date +%Y%m%d_%H%M%S).mkv"
@@ -52,12 +50,11 @@ start() {
   sleep 1
   if ! recording_pid >/dev/null; then
     rm -f "$STATE" "$raw"
-    notify -u critical "Failed to start" "codec rejected"
+    notify --type error "Failed to start" "codec rejected"
     exit 1
   fi
 
   notify "Recording started" "${w}x${h}"
-  refresh_waybar
 }
 
 # Largest resolution/framerate the bitrate can carry at BPP quality.
@@ -124,7 +121,7 @@ compress() {
     bitrate=$(calc "$bitrate * $MAX_BYTES / $size * 0.9")
   done
 
-  notify -u critical "Still over limit" "$(calc "$size / 1000000") MB after $attempt tries"
+  notify --type error "Still over limit" "$(calc "$size / 1000000") MB after $attempt tries"
   return 1
 }
 
@@ -138,9 +135,8 @@ stop() {
   # the container on interrupt. Anything else leaves an unplayable file.
   kill -INT "$pid" 2>/dev/null || true
   while kill -0 "$pid" 2>/dev/null; do sleep 0.1; done
-  refresh_waybar
 
-  [[ -s $raw ]] || { notify -u critical "Nothing recorded" "no output file"; exit 1; }
+  [[ -s $raw ]] || { notify --type error "Nothing recorded" "no output file"; exit 1; }
 
   out="${raw%.mkv}.mp4"
   size=$(stat -c %s "$raw")
@@ -150,7 +146,7 @@ stop() {
   if ((size <= BUDGET)) || (( $(calc "$dur <= 0") )); then
     # Already small enough - stream copy, no generation loss.
     ffmpeg -nostdin -y -v error -i "$raw" -c copy -movflags +faststart "$out" \
-      || { notify -u critical "Remux failed" "kept ${raw##*/}"; exit 1; }
+      || { notify --type error "Remux failed" "kept ${raw##*/}"; exit 1; }
   else
     compress "$raw" "$out" "$dur" || exit 1
   fi

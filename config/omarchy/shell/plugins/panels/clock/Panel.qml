@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import qs.Commons
 import qs.Ui
 import "Model.js" as Model
@@ -52,18 +53,16 @@ Panel {
   // asks for a birth year and a life expectancy, and a second bar tracks one
   // against the other. A birth year rather than an age, so it keeps counting
   // on its own. Without one the bar stays hidden.
-  readonly property int birthYear: Model.parseBirthYear(setting("birthYear", 0), today.getFullYear())
+  readonly property int birthYear: Model.parseBirthYear(stored("birthYear", 0), today.getFullYear())
   readonly property int age: Model.ageFromBirthYear(birthYear, today.getFullYear())
-  readonly property int lifeExpectancy: Model.parseLifeExpectancy(setting("lifeExpectancy", 0))
+  readonly property int lifeExpectancy: Model.parseLifeExpectancy(stored("lifeExpectancy", 0))
   readonly property real lifeDone: Model.lifeProgress(age, lifeExpectancy)
   readonly property int lifeDonePercent: Model.lifeProgressPercent(age, lifeExpectancy)
   property bool editingLife: false
 
-  // Unset falls through to the locale's own first day, so a fresh install
-  // starts out matching the rest of the desktop rather than a hardcoded
-  // convention. Clicking the grid's "W" heading writes the choice back to
-  // shell.json.
-  readonly property int weekStart: Model.normalizedWeekStart(setting("weekStartDay", null), Qt.locale().firstDayOfWeek)
+  // Unset falls through to the locale's own first day. Clicking the grid's "W"
+  // heading overrides it.
+  readonly property int weekStart: Model.normalizedWeekStart(stored("weekStartDay", null), Qt.locale().firstDayOfWeek)
   // The interface is English throughout, so day names are not taken from the
   // system locale. Where the week starts still is: that is a regional
   // convention rather than a translation, and it stays overridable above.
@@ -143,22 +142,53 @@ Panel {
     moveMonth(delta * 12)
   }
 
-  // Applied locally first so the panel redraws on the click itself; the
-  // shell.json write comes back through the bar as the same value. With no
-  // writable entry (the widget is not in the layout) it stays a session-only
-  // preference rather than doing nothing. The host widget builds its own
-  // entry when the label format is cycled, so it has to be kept in step or
-  // it would write this key straight back out from a stale copy.
-  function persistSettings(values) {
-    var entry = { id: root.moduleName }
-    for (var existing in root.settings) if (existing !== "id") entry[existing] = root.settings[existing]
-    for (var key in values) entry[key] = values[key]
+  // The calendar's own state: a chosen week start, and the birth year and life
+  // expectancy behind the second progress bar. Kept beside the weather panel's
+  // location file, in the plugin's own file rather than a shared settings
+  // store. Applied locally first so the panel redraws on the click itself.
+  property var clockState: ({})
 
-    root.settings = entry
-    if (root.hostWidget && "settings" in root.hostWidget) root.hostWidget.settings = entry
-    if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function")
-      root.bar.shell.updateEntryInline(root.moduleName, entry)
+  function stored(key, fallback) {
+    var value = root.clockState ? root.clockState[key] : undefined
+    return value === undefined || value === null ? fallback : value
   }
+
+  function persistSettings(values) {
+    var next = ({})
+    for (var existing in root.clockState) next[existing] = root.clockState[existing]
+    for (var key in values) next[key] = values[key]
+
+    root.clockState = next
+    stateFile.setText(JSON.stringify(next, null, 2) + "\n")
+  }
+
+  readonly property string stateDir: Quickshell.env("HOME") + "/.local/state/omarchy/settings"
+
+  FileView {
+    id: stateFile
+    path: root.stateDir + "/clock.json"
+    watchChanges: true
+    atomicWrites: true
+    printErrors: false
+    onFileChanged: reload()
+    onLoaded: {
+      try {
+        var parsed = JSON.parse(text() || "{}")
+        if (Util.isPlainObject(parsed)) root.clockState = parsed
+      } catch (e) {
+        console.warn("clock state parse failed:", e)
+      }
+    }
+  }
+
+  // atomicWrites lands a temp file beside the real one, so the directory has to
+  // be there before the first save.
+  Process {
+    id: ensureStateDirProc
+    command: ["mkdir", "-p", root.stateDir]
+  }
+
+  Component.onCompleted: ensureStateDirProc.running = true
 
   function setWeekStart(day) {
     var next = Model.normalizedWeekStart(day, root.weekStart)

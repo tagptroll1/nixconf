@@ -16,7 +16,6 @@ Item {
   id: root
 
   property var shell: null
-  property var manifest: null
 
   property bool opened: false
   property string connectionName: ""
@@ -63,7 +62,7 @@ Item {
 
   function dismiss() {
     if (root.shell && typeof root.shell.hide === "function")
-      root.shell.hide((root.manifest && root.manifest.id) || "omarchy.speedtest")
+      root.shell.hide("omarchy.speedtest")
     else close()
   }
 

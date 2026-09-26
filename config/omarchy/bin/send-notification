@@ -1,0 +1,92 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+icon_dir="${CONFIG_ICON_DIR:-${BASH_SOURCE[0]%/*}/../../icons/lucide/icons}"
+
+usage() {
+  printf '%s\n' 'Usage: send-notification [OPTIONS] TITLE [TEXT]
+
+Send a desktop notification through notify-send and the active notification server.
+Requires Bash and libnotify; no separate daemon or private D-Bus hints.
+
+Options:
+  --type info|warning|error  Default: info. Selects default icon and title color.
+  --icon, -i ICON           Lucide name, image path, themed name, emoji or glyph.
+  --list-icons             List shared Lucide names (also used by Fish completion).
+  --expire-time, -t MS      Requested timeout; -1 uses server default, 0 requests
+                           no expiry. Server policy can override this value.
+  --                       End options for dash-leading titles or text.
+  --help, -h               Show this help.
+
+Examples:
+  send-notification "Download complete" "Archive saved"
+  send-notification --type warning "Low disk space" "Less than 5 GB left"
+  send-notification --type error "Backup failed" "Connection lost"
+  send-notification -i /absolute/path/image.png "Screenshot saved"
+  send-notification -i network-wireless "Connected"
+  send-notification -i bell "Reminder"
+  send-notification -t 0 "Reminder" "Keep until dismissed"
+
+Types use the standard category hint with local severity values. All types use
+normal urgency and respect DND in this shell. Zero timeout keeps notifications
+until dismissed; other normal notifications have an eight-second minimum here.
+Other servers may ignore type colors. Icons and text use standard fields.
+
+For click actions, use notify-send --action directly; this sender does not run
+commands. Standard actions work only while their sender and server stay alive.
+
+Nix installs this command system-wide with its dependencies. From the repo root:
+  sudo nixos-rebuild switch --flake path:.#tagp' >&2
+  exit "${1:-1}"
+}
+
+type=info
+icon=""
+options=()
+text=()
+while (($#)); do
+  case "$1" in
+    --help|-h) usage 0 2>&1 ;;
+    --list-icons)
+      (($# == 1 && ${#text[@]} == 0)) || usage
+      for file in "$icon_dir"/*.svg; do
+        [[ -f $file ]] || continue
+        name=${file##*/}
+        printf '%s\n' "${name%.svg}"
+      done
+      exit 0
+      ;;
+    --type|--icon|-i|--expire-time|-t)
+      (($# >= 2)) || usage
+      case "$1" in
+        --type) type=$2 ;;
+        --icon|-i) [[ -n $2 ]] || usage; icon=$2 ;;
+        --expire-time|-t)
+          [[ $2 =~ ^(-1|[0-9]+)$ ]] || usage
+          options+=(-t "$2")
+          ;;
+      esac
+      shift 2
+      ;;
+    --) shift; text+=("$@"); break ;;
+    -*) usage ;;
+    *) text+=("$1"); shift ;;
+  esac
+done
+
+case "$type" in
+  info) default_icon=info ;;
+  warning) default_icon=triangle-alert ;;
+  error) default_icon=circle-x ;;
+  *) usage ;;
+esac
+((${#text[@]} >= 1 && ${#text[@]} <= 2)) || usage
+[[ -n ${text[0]} ]] || usage
+
+icon=${icon:-$default_icon}
+if [[ $icon != */* && -f $icon_dir/$icon.svg ]]; then
+  icon="$(cd -- "$icon_dir" && pwd)/$icon.svg"
+fi
+
+exec notify-send -a send-notification --category "$type" -u normal \
+  -i "$icon" "${options[@]}" -- "${text[@]}"

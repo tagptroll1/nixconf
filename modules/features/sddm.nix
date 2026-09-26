@@ -3,12 +3,11 @@
   flake.nixosModules.sddm =
     { pkgs, ... }:
     let
-      # astronaut copies Background into the store, so sddm (own user) can read it.
-      # /home is mode 700, so the wallpaper must come from the store, not Downloads.
+      # SDDM cannot traverse the private home containing the selected wallpaper.
       sddm-astronaut = pkgs.sddm-astronaut.override {
         embeddedTheme = "astronaut";
         themeConfig = {
-          Background = "${./wallpaper.png}";
+          Background = "/var/lib/sddm-wallpaper/background";
           CropBackground = "true";
           FullBlur = "false";
           PartialBlur = "false";
@@ -40,12 +39,22 @@
           });
     in
     {
+      systemd.tmpfiles.rules = [
+        "d /var/lib/sddm-wallpaper 0755 tagp users -"
+        "C /var/lib/sddm-wallpaper/background 0644 tagp users - ${./wallpaper.png}"
+      ];
+
+      systemd.services.home-manager-tagp.after = [ "systemd-tmpfiles-setup.service" ];
+
       services.displayManager.sddm = {
         enable = true;
         wayland.enable = true; # run sddm greeter as wayland session
         package = pkgs.kdePackages.sddm; # qt6 sddm, matches astronaut
         theme = "sddm-astronaut-theme";
-        extraPackages = sddm-astronaut.propagatedBuildInputs;
+        # The published background keeps its source format and themes ship webp,
+        # which qtbase cannot decode (gif/ico/jpeg only) - without qtimageformats
+        # the greeter draws BackgroundColor instead of the wallpaper.
+        extraPackages = sddm-astronaut.propagatedBuildInputs ++ [ pkgs.kdePackages.qtimageformats ];
       };
 
       # theme must sit in sddm's theme search path
@@ -54,7 +63,6 @@
       ];
 
       services.displayManager.sessionPackages = [
-        (session "mango-wl" "config.conf")
         (session "mango-qs" "config-qs.conf")
       ];
     };

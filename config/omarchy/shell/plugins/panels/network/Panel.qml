@@ -125,16 +125,13 @@ Panel {
   property int headerIndex: 0
   readonly property bool canDisconnect: !!connectedWifiNetwork
   readonly property bool headerHasDisconnect: false
-  readonly property bool canShareWifi: info.type === "wifi" && canShareNetwork(connectedWifiNetwork)
   // The hero switch is the Wi-Fi radio, so it only exists when there is a
   // radio to switch. On a wired box it would otherwise sit there reading
   // "off" beside a perfectly live Ethernet connection.
   readonly property bool canToggleWifi: networkManagerAvailable && wifiStationAvailable
-  readonly property int qrHeaderIndex: canShareWifi ? 0 : -1
-  readonly property int speedHeaderIndex: canRunSpeedTest ? (canShareWifi ? 1 : 0) : -1
-  readonly property int toggleHeaderIndex: canToggleWifi ? (canShareWifi ? 1 : 0) + (canRunSpeedTest ? 1 : 0) : -1
-  readonly property int headerActionCount: (canShareWifi ? 1 : 0) + (canRunSpeedTest ? 1 : 0) + (canToggleWifi ? 1 : 0)
-  readonly property bool qrHeaderHasCursor: cursorActive && focusSection === "header" && headerIndex === qrHeaderIndex
+  readonly property int speedHeaderIndex: canRunSpeedTest ? 0 : -1
+  readonly property int toggleHeaderIndex: canToggleWifi ? (canRunSpeedTest ? 1 : 0) : -1
+  readonly property int headerActionCount: (canRunSpeedTest ? 1 : 0) + (canToggleWifi ? 1 : 0)
   readonly property bool speedHeaderHasCursor: cursorActive && focusSection === "header" && headerIndex === speedHeaderIndex
   readonly property bool toggleHeaderHasCursor: cursorActive && focusSection === "header" && headerIndex === toggleHeaderIndex
   readonly property string toggleHint: Networking.wifiEnabled ? "Turn Wi-Fi off" : "Turn Wi-Fi on"
@@ -216,15 +213,13 @@ Panel {
     function hide() { root.close() }
     function toggle() { root.toggle() }
     function toggleNetwork() { root.toggleNetwork() }
-    // Compat routes for configs that summon the centered cards through the
-    // network target; both cards are their own plugins now.
-    function showQr() { root.summonWifiQr(true) }
+    // Compat route for configs that summon the speed test through the network
+    // target; the card is its own panel.
     function speedTest() { root.summonSpeedTest() }
   }
 
   function activateHeader() {
-    if (headerIndex === qrHeaderIndex) summonWifiQr()
-    else if (headerIndex === speedHeaderIndex) summonSpeedTest()
+    if (headerIndex === speedHeaderIndex) summonSpeedTest()
     else if (headerIndex === toggleHeaderIndex) toggleNetwork()
   }
 
@@ -401,11 +396,6 @@ Panel {
     return Model.canForgetNetwork(net)
   }
 
-  function canShareNetwork(net) {
-    if (!net || !net.connected) return false
-    return net.security !== WifiSecurityType.Wpa2Eap && net.security !== WifiSecurityType.WpaEap
-  }
-
   function selectWifiActionByDelta(delta) {
     if (selectedIndex < 0 || selectedIndex >= wifiNetworks.length) return
     if (!canForgetNetwork(wifiNetworks[selectedIndex])) {
@@ -451,22 +441,6 @@ Panel {
   }
 
   readonly property string icon: Model.connectionIcon(kind, signalStrength)
-
-  // The share card is its own panel plugin (omarchy.wifiqr) so a replacement
-  // design can take it over; summon() routes to whichever implementation is
-  // enabled. The panel's own button pins the interface it is showing. The
-  // IPC route forces self-detection instead: details polling stops while the
-  // panel is closed, so its cached interface can be stale.
-  function summonWifiQr(forceDetect) {
-    controller.hide()
-    cancelPasswordPrompt()
-    var payload = {}
-    if (!forceDetect && info.type === "wifi" && info.iface) {
-      payload.iface = info.iface
-      if (info.ssid) payload.ssid = info.ssid
-    }
-    bar.shell.summon("omarchy.wifiqr", JSON.stringify(payload))
-  }
 
   function refresh(scanWifi) {
     if (scanWifi === undefined) scanWifi = false
@@ -1106,22 +1080,6 @@ Panel {
           spacing: Style.space(8)
           anchors.right: parent.right
           anchors.verticalCenter: parent.verticalCenter
-
-          Button {
-            id: qrAction
-            visible: root.canShareWifi
-            iconText: "󰐲"
-            tooltipText: "Show QR code"
-            foreground: root.bar.foreground
-            fontFamily: root.bar.fontFamily
-            iconSize: Style.font.subtitle * 1.5
-            horizontalPadding: Style.space(5)
-            verticalPadding: Style.space(2)
-            hasCursor: root.qrHeaderHasCursor
-            Layout.alignment: Qt.AlignVCenter
-            onHovered: function(on) { if (on) root.setHeaderCursor(root.qrHeaderIndex) }
-            onClicked: root.summonWifiQr()
-          }
 
           Button {
             id: speedAction

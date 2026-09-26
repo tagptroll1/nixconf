@@ -8,56 +8,21 @@ BarWidget {
   id: root
   moduleName: "omarchy.indicators"
 
-  readonly property var defaultIndicatorEntries: [ "NightLight", "Dnd", "StayAwake", "Spotify" ]
-  readonly property var indicatorEntries: indicatorEntriesFromSettings(settings)
+  // The indicators, in the order they sit beside the clock. Inactive ones stay
+  // folded away until the center section is hovered.
+  readonly property var indicatorEntries: [ "NightLight", "Dnd", "StayAwake", "Spotify" ]
   property var activeIndicatorIds: []
   property var indicatorActiveStates: ({})
   property bool indicatorAreaHovered: false
   property bool indicatorItemHovered: false
-  readonly property bool alwaysShowIndicators: setting("alwaysShow", false) === true
-  readonly property bool revealInactiveIndicators: alwaysShowIndicators || indicatorAreaHovered || indicatorItemHovered || (bar && bar.centerSectionRevealHeld === true && bar.centerHoverRevealSuppressed !== true)
+  readonly property bool revealInactiveIndicators: indicatorAreaHovered || indicatorItemHovered || (bar && bar.centerSectionRevealHeld === true && bar.centerHoverRevealSuppressed !== true)
 
   signal refreshRequested()
 
   ListModel { id: activeIndicatorModel }
 
   function entryId(entry) {
-    if (typeof entry === "string") return entry
-    if (Util.isPlainObject(entry)) {
-      var id = entry["id"]
-      if (id !== undefined && id !== null && String(id) !== "") return String(id)
-    }
-    return ""
-  }
-
-  function entrySettings(entry) {
-    if (!Util.isPlainObject(entry)) return {}
-    var copy = {}
-    for (var key in entry) {
-      if (key === "id") continue
-      copy[key] = entry[key]
-    }
-    return copy
-  }
-
-  function indicatorEntriesFromSettings(settings) {
-    var source = defaultIndicatorEntries
-    if (settings.items && typeof settings.items.length === "number" && settings.items.length > 0) source = settings.items
-    else if (settings.indicators && typeof settings.indicators.length === "number" && settings.indicators.length > 0) source = settings.indicators
-
-    var result = []
-    for (var i = 0; i < source.length; i++) {
-      var item = source[i]
-      if (typeof item !== "string" && item !== null && typeof item === "object") {
-        try {
-          item = JSON.parse(JSON.stringify(item))
-        } catch (error) {
-        }
-      }
-      var id = entryId(item)
-      if (id !== "") result.push(item)
-    }
-    return result
+    return typeof entry === "string" ? entry : ""
   }
 
   function setIndicatorAreaHovered(hovered) {
@@ -406,7 +371,6 @@ BarWidget {
     property bool reportActiveState: false
     property bool activeStateObserved: false
     readonly property string indicatorId: root.entryId(entry)
-    readonly property var indicatorSettings: root.entrySettings(entry)
     readonly property var barRef: root.bar
 
     implicitWidth: indicatorSource.item && indicatorSource.item.visible ? indicatorSource.item.implicitWidth : 0
@@ -419,7 +383,6 @@ BarWidget {
       syncActiveState()
     }
     onIndicatorBlockChanged: injectProps()
-    onIndicatorSettingsChanged: injectProps()
     onIndicatorsModuleChanged: {
       injectProps()
       syncActiveState()
@@ -450,7 +413,6 @@ BarWidget {
       if (!target) return
       if ("bar" in target) target.bar = root.bar
       if ("moduleName" in target) target.moduleName = indicatorId
-      if ("settings" in target) target.settings = indicatorSettings
       if ("indicatorBlock" in target) target.indicatorBlock = indicatorBlock
       if ("indicatorHost" in target) target.indicatorHost = root
       if ("activeOverride" in target) target.activeOverride = indicatorBlock === "active" ? true : null

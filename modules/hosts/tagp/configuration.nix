@@ -15,10 +15,10 @@ in
         self.nixosModules.tagpUser
         self.nixosModules.mangowm
         self.nixosModules.homeManager
-        self.nixosModules.steam
         self.nixosModules.fonts
         self.nixosModules.sddm
         self.nixosModules.omarchy
+        self.nixosModules.apps
       ];
 
       # Bootloader.
@@ -137,8 +137,10 @@ in
           xdg-desktop-portal-wlr =
             inputs.nixpkgs-xdpw.legacyPackages.${prev.stdenv.hostPlatform.system}.xdg-desktop-portal-wlr;
         })
-        # mopidy: bump core + extensions to mopidy 4 stable (see modules/overlays/mopidy.nix)
+        # mopidy: bump core + extensions to mopidy 4 stable (see modules/overlays/mopidy.nix).
+        # Build plumbing for modules/apps/mopidy.nix - an overlay is not a home option.
         self.overlays.mopidy
+        # Build plumbing for modules/apps/obs-studio.nix.
         # obs postFixup runs addDriverRunpath over $out/lib only, so the obs-nvenc-test
         # probe in $out/bin can't dlopen libnvidia-encode and OBS decides NVENC is absent
         # (log: "Test process failed: nvenc_lib"). See NixOS/nixpkgs#382666.
@@ -169,7 +171,8 @@ in
           };
         })
       ];
-      # pnpm only build-time dep of vesktop; remove once nixpkgs bumps pnpm
+      # pnpm only build-time dep of vesktop (modules/apps/vesktop.nix); remove once
+      # nixpkgs bumps pnpm. nixpkgs.config is system-wide, so it cannot live there.
       nixpkgs.config.permittedInsecurePackages = [
         "pnpm-10.29.2"
       ];
@@ -179,12 +182,9 @@ in
       environment.systemPackages = with pkgs; [
         # System
         vim
-        waybar
         quickshell
         ghostty
-        btop
-        rofi
-        papirus-icon-theme # app icons for rofi drun (Adwaita lacks them)
+        papirus-icon-theme # app icons for launchers (Adwaita lacks them)
         yaru-theme # the Yaru-* icon themes omarchy themes name in their icons.theme
         jq
         wlr-randr
@@ -193,39 +193,11 @@ in
         wlopm
         wlsunset # night light for the quickshell shell (wlr-gamma-control)
         libxkbcommon # xkbcli, for the keyboard-layout widget's language codes
-        bluetui # bluetooth TUI, opened from the waybar bluetooth module
-        cosmic-files # COSMIC file manager, runs standalone outside the COSMIC session
-        mpv
-        inputs.awww.packages.${pkgs.stdenv.hostPlatform.system}.awww
 
-        # Dev
-        tree
-        neovim
-        tmux
-        wget
-        fzf
-        ripgrep
-        lazygit
+        # Dev - the toolchains themselves are apps (modules/apps/*-toolchain.nix);
+        # these two stay because a flake build and root both need them.
         git
-        claude-code
-        gcc
-        clang
-        cl
-        zig
-        go
-        gopls
-        rustc
-        cargo
-        rust-analyzer
-        rustfmt
-        clippy
-        nodejs # pnpm needs a node runtime; also what vite/svelte-kit run on
-        pnpm
-        nixd
-        nixfmt
-        marksman # markdown LSP
-        qt6.qtdeclarative # qmlls, QML LSP
-        tree-sitter # nvim-treesitter main requires the CLI to build parsers
+        wget
 
         # Screenshot / screen recording
         grim
@@ -235,43 +207,10 @@ in
         ffmpeg # screen-record.sh remuxes mkv -> mp4 (stream copy)
 
         # Notifications
-        mako
         libnotify
 
         # Misc
-        fastfetch
-        vesktop
-        signal-desktop
-        spotify
-        pulsemixer
         playerctl
-        obs-studio # screen capture via existing pipewire/wlr portal; NVENC via nvidia driver
-
-        # rofi script modi: list running procs by mem, select to kill.
-        (writeShellScriptBin "rofi-kill" ''
-          if [ -z "$1" ]; then
-            ${procps}/bin/ps -eo pid,comm,%mem,%cpu --sort=-%mem --no-headers \
-              | ${gawk}/bin/awk '{ printf "%-8s %-25s mem:%s%% cpu:%s%%\n", $1, $2, $3, $4 }'
-          else
-            pid=$(echo "$1" | ${gawk}/bin/awk '{print $1}')
-            ${procps}/bin/kill "$pid" 2>/dev/null || ${procps}/bin/kill -9 "$pid" 2>/dev/null
-          fi
-        '')
-
-        # rofi confirm prompt for poweroff. In PATH rather than run from the repo so
-        # the "nixos-dotfiles" path can't false-match rofi drun's exec field search.
-        (writeShellScriptBin "shutdown-confirm" ''
-          choice=$(printf 'No\nYes' | ${rofi}/bin/rofi -dmenu -p "Are you sure?")
-          [ "$choice" = "Yes" ] && ${systemd}/bin/systemctl poweroff
-        '')
-
-        # waybar custom/media: python3 with pygobject + playerctl GIR typelib
-        (writeShellScriptBin "waybar-mediaplayer" ''
-          export GI_TYPELIB_PATH=${playerctl}/lib/girepository-1.0''${GI_TYPELIB_PATH:+:$GI_TYPELIB_PATH}
-          exec ${
-            python3.withPackages (ps: [ ps.pygobject3 ])
-          }/bin/python3 "$HOME/.config/waybar/mediaplayer.py" "$@"
-        '')
 
       ];
 

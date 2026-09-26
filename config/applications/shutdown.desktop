@@ -1,8 +1,0 @@
-[Desktop Entry]
-Name=Shut down
-Comment=Power off the machine
-Exec=shutdown-confirm
-Icon=system-shutdown
-Categories=System
-Terminal=false
-Type=Application

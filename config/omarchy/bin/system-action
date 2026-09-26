@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+case "${1:-}" in
+  suspend|hibernate|reboot) command=(systemctl "$1") ;;
+  shutdown) command=(systemctl poweroff) ;;
+  logout) command=(mmsg dispatch quit) ;;
+  *) printf 'Usage: system-action {suspend|hibernate|logout|reboot|shutdown}\n' >&2; exit 2 ;;
+esac
+
+if error=$("${command[@]}" 2>&1); then
+  exit 0
+else
+  status=$?
+  printf '%s\n' "$error" >&2
+  send-notification --type error "System: $1 failed" "${error:-Command exited with status $status}" || true
+  exit "$status"
+fi

@@ -1,0 +1,7 @@
+Source: https://github.com/lucide-icons/lucide
+Package: lucide-static 0.468.0 (published 2024-12-05)
+Archive: https://registry.npmjs.org/lucide-static/-/lucide-static-0.468.0.tgz
+SHA512: 26fa56ba2dae9b14721153281137cccdbfaa2aa89b57fb1da2a25b2a65b524b764ba15e5b892a83ba36a09bbc22bfbc06d4b87e5b4c4143e13eae102b2b35c9c
+Vendored: 2026-09-20
+Contents: icons/ and LICENSE, unchanged from npm archive.
+License: ISC; see LICENSE.

@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+
+set -e
+
+DESTINATION_DIR=/var/lib/sddm-wallpaper
+SOURCE="$HOME/.local/state/omarchy/current/background"
+
+[[ -d $DESTINATION_DIR ]] || exit 0
+
+TEMP=""
+trap '[[ -z $TEMP ]] || rm -f -- "$TEMP"' EXIT
+trap 'echo "sddm-background-sync: failed to publish background" >&2' ERR
+trap 'exit 1' HUP INT TERM
+
+# Resolve the selection only after earlier publishers have finished.
+exec 9>"$DESTINATION_DIR/.sync.lock"
+flock 9
+[[ -f $SOURCE ]] || exit 0
+SOURCE=$(readlink -f -- "$SOURCE")
+
+# Same-directory rename keeps readers on the prior image until the copy is ready.
+TEMP=$(mktemp "$DESTINATION_DIR/.background.XXXXXX")
+cp -L -- "$SOURCE" "$TEMP"
+chmod 0644 "$TEMP"
+mv -fT -- "$TEMP" "$DESTINATION_DIR/background"

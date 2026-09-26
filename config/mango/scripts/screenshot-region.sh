@@ -10,12 +10,12 @@ mode="${1:-region}"
 case "$mode" in
   full)
     grim - | wl-copy --type image/png
-    notify-send -t 2000 "Screenshot" "Full screen copied to clipboard"
+    send-notification -t 2000 "Screenshot" "Full screen copied to clipboard"
     ;;
   region)
     geometry=$(slurp) || exit 0   # exit cleanly if selection cancelled (Esc)
     grim -g "$geometry" - | wl-copy --type image/png
-    notify-send -t 2000 "Screenshot" "Region copied to clipboard"
+    send-notification -t 2000 "Screenshot" "Region copied to clipboard"
     ;;
   save)
     geometry=$(slurp) || exit 0   # exit cleanly if selection cancelled (Esc)
@@ -23,10 +23,15 @@ case "$mode" in
     mkdir -p "$dir"
     file="$dir/$(date +%Y-%m-%d_%H-%M-%S).png"
     grim -g "$geometry" - | tee "$file" | wl-copy --type image/png
-    # --exec rides along as the omarchy-exec-argv hint: clicking the toast opens
-    # the folder in COSMIC Files.
-    omarchy-notification-send -t 5000 "Screenshot saved" "$file" \
-      --exec cosmic-files "$dir"
+    # Keep the action listener alive without blocking the screenshot caller.
+    (
+      action=$(notify-send --app-name send-notification --category info \
+        --action default='Open folder' -u normal -i dialog-information \
+        -t 5000 -- "Screenshot saved" "$file")
+      if [[ $action == default ]]; then
+        cosmic-files "$dir"
+      fi
+    ) &
     ;;
   *)
     echo "usage: $0 [region|full|save]" >&2

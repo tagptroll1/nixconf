@@ -13,7 +13,11 @@
       url = "github:mangowm/mango";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    awww.url = "git+https://codeberg.org/LGFae/awww";
+    # 2.0 is tagged but not yet in nixpkgs or npm latest
+    opencode = {
+      url = "github:anomalyco/opencode/v2.0.16";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
 
     flake-parts.url = "github:hercules-ci/flake-parts";
     import-tree.url = "github:vic/import-tree";

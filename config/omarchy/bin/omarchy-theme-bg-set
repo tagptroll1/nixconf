@@ -18,7 +18,9 @@ if [[ ! -f $BACKGROUND ]]; then
 fi
 
 # Create symlink to the new background
-ln -nsf "$BACKGROUND" "$CURRENT_BACKGROUND_LINK"
+if ln -nsf "$BACKGROUND" "$CURRENT_BACKGROUND_LINK"; then
+  sddm-background-sync || true
+fi
 
 # Update the live shell background immediately when it is running. The
 # background plugin also polls this symlink, but IPC avoids the visible delay.

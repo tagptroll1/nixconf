@@ -8,26 +8,23 @@ import "Model.js" as Model
 // Date/time label for the bar, and the host for the calendar popup.
 //
 // Left click reveals the calendar — asking "what is the date?" is what a
-// click on a clock means — right click walks the common label formats, and
-// middle click opens the timezone picker.
+// click on a clock means — and right click walks the common label formats.
 BarWidget {
   id: root
   moduleName: "omarchy.clock"
 
   property date displayDate: clock.date
 
-  readonly property string configuredFormat: vertical
-    ? setting("verticalFormat", "HH\n—\nmm")
-    : setting("format", "dddd HH:mm")
-  readonly property string configuredAltFormat: vertical
-    ? setting("verticalFormatAlt", "dd\nMMM\n'W'ww\n''yy")
-    : setting("formatAlt", "d MMMM 'W'ww yyyy")
+  // Set by the bar. The second one is where a right click goes first.
+  property string format: "dddd HH:mm"
+  property string formatAlt: "d MMMM 'W'ww yyyy"
 
-  readonly property var formatRing: Model.clockFormatRing(configuredFormat, configuredAltFormat, Model.clockFormats(vertical))
+  readonly property var formatRing: Model.clockFormatRing(format, formatAlt, Model.clockFormats(vertical))
 
-  // What the bar shows is what shell.json stores, so a cycled format is the
-  // format from then on rather than something that reverts on restart.
-  readonly property string activeFormat: configuredFormat
+  // Cycling walks the ring for as long as the shell runs; the format the bar
+  // declares is the one it starts on again next time.
+  property string activeFormat: format
+  onFormatChanged: activeFormat = format
 
   // A seconds label needs the clock to tick sixty times as often, and a
   // repaint a second is a price only the formats that print seconds pay.
@@ -41,19 +38,9 @@ BarWidget {
   }
 
   function cycleFormat() {
-    var current = String(configuredFormat)
-    var next = Model.nextClockFormat(formatRing, current)
-    if (next === "" || next === current) return
-
-    var entry = { id: root.moduleName }
-    for (var key in root.settings) if (key !== "id") entry[key] = root.settings[key]
-    entry[vertical ? "verticalFormat" : "format"] = next
-
-    // Applied locally first so the label changes on the click itself; the
-    // shell.json write comes back through the bar as the same value.
-    root.settings = entry
-    if (root.bar && root.bar.shell && typeof root.bar.shell.updateEntryInline === "function")
-      root.bar.shell.updateEntryInline(root.moduleName, entry)
+    var next = Model.nextClockFormat(formatRing, root.activeFormat)
+    if (next === "" || next === root.activeFormat) return
+    root.activeFormat = next
   }
 
   function formatted(date) {
@@ -102,7 +89,6 @@ BarWidget {
     var target = panelLoader.item
     if (!target) return
     if ("bar" in target) target.bar = root.bar
-    if ("settings" in target) target.settings = root.settings
     if ("anchorItem" in target) target.anchorItem = button
     if ("hostWidget" in target) target.hostWidget = root
   }
@@ -111,7 +97,6 @@ BarWidget {
   implicitHeight: button.implicitHeight
 
   onBarChanged: injectPanel()
-  onSettingsChanged: injectPanel()
 
   SystemClock {
     id: clock
@@ -157,7 +142,6 @@ BarWidget {
 
     onPressed: function(b) {
       if (b === Qt.RightButton) root.cycleFormat()
-      else if (b === Qt.MiddleButton) { if (root.bar) root.bar.run("omarchy-menu-timezone") }
       else root.togglePanel()
     }
 

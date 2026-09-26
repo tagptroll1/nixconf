@@ -4,9 +4,9 @@ import qs.Commons
 // Base item every bar widget extends. Codifies the three properties the
 // bar host injects into each widget slot:
 //   bar         - the host Bar instance (foreground/background/run/etc).
-//   moduleName  - widget's canonical id, used by the host registry to look
-//                 up settings and to disambiguate inline IPC routes.
-//   settings    - per-widget overrides read from shell.json's layout entry.
+//   moduleName  - the widget id the bar knows it by, used for panel routing
+//                 and IPC targets.
+//   settings    - per-widget overrides, set where the widget is declared.
 //
 // Widgets are free to add their own properties, signals, and child items.
 Item {
@@ -34,10 +34,8 @@ Item {
     }
   }
 
-  // Read a single value from this widget's inline shell.json entry, with a
-  // fallback for missing/null values. Every widget that takes user-tunable
-  // settings needs this; defining it once on the base keeps the wiring
-  // consistent.
+  // Read a single value out of `settings`, with a fallback for missing/null
+  // values.
   function setting(name, fallback) {
     var value = settings ? settings[name] : undefined
     return value === undefined || value === null ? fallback : value
