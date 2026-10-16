@@ -129,6 +129,13 @@ function passwordThenRunArgv(jobScript) {
 // under it, the cursor under that, all centered on however wide the terminal
 // came up. `stty` rather than `tput`, which needs a terminfo entry for whatever
 // TERM the terminal announces.
+//
+// The window can come up at Ghostty's default size and only then shrink to its
+// rule, and Ghostty's reflow strands the cursor (drawn as the lock) away from
+// the prompt. So every resize redraws from scratch. Bash holds a WINCH trap
+// until `read` returns, hence the short timeout; half-typed input waits in the
+// tty's line buffer meanwhile. Echo goes off once, not per `read -s`, so it
+// never flickers back on between polls.
 function passwordPrompt() {
   var lock = [
     "  ╭─────╮  ",
@@ -139,21 +146,33 @@ function passwordPrompt() {
     "╰─────────╯"
   ]
 
-  var script = 'cols=$(stty size 2>/dev/null | cut -d" " -f2)\n'
-    + 'cols=${cols:-80}\n'
-    + 'center() { printf "%*s%s\\n" $(( (cols - ${#1}) / 2 )) "" "$1"; }\n'
-    + 'printf "\\n"\n'
+  var script = 'center() { printf "%*s%s\\n" $(( (cols - ${#1}) / 2 )) "" "$1"; }\n'
+    + 'draw() {\n'
+    + '  cols=$(stty size 2>/dev/null | cut -d" " -f2)\n'
+    + '  cols=${cols:-80}\n'
+    + '  printf "\\e[H\\e[2J\\n"\n'
 
-  for (var i = 0; i < lock.length; i++) script += 'center "' + lock[i] + '"\n'
+  for (var i = 0; i < lock.length; i++) script += '  center "' + lock[i] + '"\n'
 
   return script
-    + 'printf "\\n"\n'
-    + 'center "Type password for sudo to rebuild"\n'
-    + 'printf "\\n"\n'
-    + 'printf "%*s❯ " $(( (cols - 2) / 2 )) ""\n'
+    + '  printf "\\n"\n'
+    + '  center "Type password for sudo to rebuild"\n'
+    + '  printf "\\n"\n'
+    + '  printf "%*s❯ " $(( (cols - 2) / 2 )) ""\n'
+    + '}\n'
+    + 'stty -echo\n'
+    + 'trap draw WINCH\n'
+    + 'draw\n'
+    + 'password=\n'
     // Ctrl-D or an empty line is a change of mind, not a blank password to
     // hand sudo and then report as a failed build.
-    + 'read -rs password || exit 0\n'
+    + 'until read -r -t 0.2 chunk; do\n'
+    + '  (( $? > 128 )) || exit 0\n'
+    + '  password+=$chunk\n'
+    + 'done\n'
+    + 'password+=$chunk\n'
+    + 'trap - WINCH\n'
+    + 'stty echo\n'
     + '[[ -n $password ]] || exit 0\n'
     + 'printf "\\n"\n'
 }
@@ -215,15 +234,47 @@ function appsScript(repo, enabledOnly) {
 // packages, and what this repo already declares. Tab-separated, kind first.
 // The home-manager option names are its module filenames, which is what
 // `programs.<name>` is keyed on.
+//
+// `nix search` walks every attribute on each call (~1s warm, ~13s on a fresh
+// revision), so both lists are dumped once and each keystroke greps the dump.
+// nixpkgs is keyed by the store path the registry pins, home-manager by
+// flake.lock, so a rebuild or flake update gets fresh lists. The lock keeps the
+// prewarm run on entering Install and the first query from both dumping. An
+// empty query only prepares.
 function searchScript(repo) {
   return 'query=$1\n'
     + 'repo=' + quote(repo) + '\n'
-    + 'hm=$(nix eval --raw --impure --expr "(builtins.getFlake \\"path:$repo\\").inputs.home-manager.outPath" 2>/dev/null)\n'
-    + '[[ -n $hm ]] && ls "$hm/modules/programs" 2>/dev/null | sed "s/\\.nix$//" \\\n'
-    + '  | grep -iF -- "$query" | head -12 | sed "s/^/hm\\t/"\n'
-    + 'nix search nixpkgs --json -- "$query" 2>/dev/null \\\n'
-    + '  | jq -r \'to_entries[] | ["pkg", (.key|sub("^legacyPackages\\\\.[^.]+\\\\.";"")), (.value.version//""), (.value.description//"")] | @tsv\' \\\n'
-    + '  | head -60\n'
+    + 'cache=${XDG_CACHE_HOME:-$HOME/.cache}/omarchy-packages\n'
+    + 'mkdir -p "$cache"\n'
+    + 'src=$(nix flake metadata --json nixpkgs 2>/dev/null | jq -r ".path // empty")\n'
+    + 'index=$cache/nixpkgs-${src##*/}.tsv\n'
+    + 'lock=$(sha1sum "$repo/flake.lock" 2>/dev/null | cut -c1-16)\n'
+    + 'programs=$cache/hm-$lock.txt\n'
+    + '{\n'
+    + '  flock 9\n'
+    + '  if [[ -n $src && ! -s $index ]]; then\n'
+    + '    nix search nixpkgs --json "^" 2>/dev/null \\\n'
+    + '      | jq -r \'to_entries[] | [(.key|sub("^legacyPackages\\\\.[^.]+\\\\.";"")), (.value.version//""), (.value.description//"")] | @tsv\' \\\n'
+    + '      >"$index.tmp" && mv "$index.tmp" "$index"\n'
+    + '  fi\n'
+    + '  if [[ ! -s $programs ]]; then\n'
+    + '    hm=$(nix eval --raw --impure --expr "(builtins.getFlake \\"path:$repo\\").inputs.home-manager.outPath" 2>/dev/null)\n'
+    + '    [[ -n $hm ]] && ls "$hm/modules/programs" | sed "s/\\.nix$//" >"$programs.tmp" && mv "$programs.tmp" "$programs"\n'
+    + '  fi\n'
+    + '  for old in "$cache"/nixpkgs-*.tsv "$cache"/hm-*.txt; do\n'
+    + '    [[ $old == "$index" || $old == "$programs" ]] || rm -f "$old"\n'
+    + '  done\n'
+    + '} 9>"$cache/lock"\n'
+    + '[[ -n $query ]] || exit 0\n'
+    + 'grep -iF -- "$query" "$programs" 2>/dev/null | head -12 | sed "s/^/hm\\t/"\n'
+    // Ranked here, not in parseSearch alone: a short query matches thousands,
+    // and only the best few may reach the menu. Exact name, prefix, anywhere
+    // in the name, then description only; shorter names first within a tier.
+    + 'grep -iF -- "$query" "$index" 2>/dev/null \\\n'
+    + '  | Q=$query awk -F"\\t" \'BEGIN { q = tolower(ENVIRON["Q"]) }\n'
+    + '    { a = tolower($1); t = a == q ? 0 : index(a, q) == 1 ? 1 : index(a, q) ? 2 : 3\n'
+    + '      print t "\\t" length($1) "\\tpkg\\t" $0 }\' \\\n'
+    + '  | sort -t"\t" -k1,1n -k2,2n | head -60 | cut -f3-\n'
     + 'shopt -s nullglob\n'
     + 'for f in "$repo/modules/apps"/*.nix; do\n'
     + '  name=${f##*/}; name=${name%.nix}\n'

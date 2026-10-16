@@ -1,6 +1,10 @@
 theme = Rose Pine
 font-family = "Fira Code"
 
+# The clipboard picker pastes with Shift+Insert; ghostty's default pastes the
+# primary selection there instead.
+keybind = shift+insert=paste_from_clipboard
+
 # Warm rose-pine overrides — orange/pink lean
 background = 24191c
 foreground = f7ebe8

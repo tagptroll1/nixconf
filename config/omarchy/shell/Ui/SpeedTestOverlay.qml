@@ -6,12 +6,10 @@ import Quickshell.Wayland
 import qs.Commons
 import qs.Ui
 
-// Centered speed test overlay shared by the network and disk speed tests. No
-// card: like the Tucson's floating cluster, the two dials sit directly on a
-// darkened scrim -- open 270° arcs, faint tick rings, hubless gradient
-// needles, and a digital readout in the middle. Esc, the scrim, or the corner
-// dismiss close it; the needles sweep to full scale and back on open, then
-// track the live readings. Callers name the dials, the unit, and the scale.
+// Centered speed test card: two dials on the menu surface, like the
+// calculator. Esc, the scrim, or clicking outside close it; the needles sweep
+// to full scale and back on open, then track the live readings. Copy puts a
+// PNG of the title and dials on the clipboard, without the buttons.
 PanelWindow {
   id: root
 
@@ -39,6 +37,17 @@ PanelWindow {
 
   readonly property bool failed: error !== ""
 
+  // Shares the [menu] surface tokens, so a theme that styles the menu styles
+  // this too.
+  readonly property color background: Color.menu.background
+  readonly property color foreground: Color.menu.text
+  readonly property color foregroundDim: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.55)
+  readonly property var borderSpec: Border.surfaceSpec("menu", "border", Color.menu.border, Math.max(1, Style.space(2)))
+
+  // Outside the config tree, so the hot-reload watcher never sees it.
+  readonly property string capturePath: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchy-speedtest.png"
+  property bool copied: false
+
   function resetScale() {
     fullScale = scaleStops[0]
   }
@@ -55,6 +64,15 @@ PanelWindow {
     fullScale = scaleStops[scaleStops.length - 1]
   }
 
+  function copyResults() {
+    results.grabToImage(function(image) {
+      if (!image.saveToFile(root.capturePath)) return
+      Quickshell.execDetached(["bash", "-c", 'wl-copy --type image/png < "$1"', "bash", root.capturePath])
+      root.copied = true
+      copiedTimer.restart()
+    })
+  }
+
   onRunningChanged: if (running) resetScale()
   onScaleStopsChanged: resetScale()
   onLeftValueChanged: expandScale(leftValue)
@@ -64,11 +82,11 @@ PanelWindow {
     NumberAnimation { duration: 400; easing.type: Easing.OutCubic }
   }
 
-  // The scrim below is a fixed near-black regardless of theme, so text and
-  // ticks on it need a fixed light palette, not the themed bar.foreground.
-  readonly property color onScrim: "white"
-  readonly property color onScrimDim: Qt.rgba(1, 1, 1, 0.55)
-  readonly property color onScrimUrgent: "#ff6b6b"
+  Timer {
+    id: copiedTimer
+    interval: 1500
+    onTriggered: root.copied = false
+  }
 
   visible: open
   // The window is instantiated hidden, so re-acquire focus after mapping and
@@ -88,17 +106,14 @@ PanelWindow {
   WlrLayershell.layer: WlrLayer.Overlay
   WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
 
-  // Deep scrim: with no card behind them, the floating dials need the
-  // backdrop to carry the contrast on any wallpaper, like the near-black
-  // panel behind a real cluster.
   Rectangle {
     anchors.fill: parent
-    color: Qt.rgba(0, 0, 0, 0.78)
+    color: Color.menu.scrim
+  }
 
-    MouseArea {
-      anchors.fill: parent
-      onClicked: root.closeRequested()
-    }
+  MouseArea {
+    anchors.fill: parent
+    onClicked: root.closeRequested()
   }
 
   Item {
@@ -109,82 +124,127 @@ PanelWindow {
     Keys.onEscapePressed: root.closeRequested()
     Keys.onReturnPressed: if (!root.running) root.runAgainRequested()
     Keys.onEnterPressed: if (!root.running) root.runAgainRequested()
+    Keys.onPressed: function(event) {
+      if (event.key === Qt.Key_C && (event.modifiers & Qt.ControlModifier)) {
+        root.copyResults()
+        event.accepted = true
+      }
+    }
 
-    Item {
-      id: cluster
+    BorderSurface {
+      id: card
       anchors.centerIn: parent
-      width: content.implicitWidth
-      height: content.implicitHeight
-      // Narrow or heavily scaled outputs: shrink the whole cluster rather
-      // than clipping it at the screen edge.
+      width: content.implicitWidth + contentLeftInset + contentRightInset
+      height: content.implicitHeight + contentTopInset + contentBottomInset
+      radius: Style.cornerRadius
+      color: root.background
+      borderSpec: root.borderSpec
+      padding: Style.spacing.panelPadding
+      // Narrow or heavily scaled outputs: shrink the whole card rather than
+      // clipping it at the screen edge.
       scale: Math.min(1,
         (keyCatcher.width - Style.space(32)) / Math.max(1, width),
         (keyCatcher.height - Style.space(32)) / Math.max(1, height))
 
-      // Swallow clicks so only the scrim outside the cluster dismisses.
+      // Swallow clicks so only the scrim outside the card dismisses.
       MouseArea { anchors.fill: parent; onClicked: {} }
 
       ColumnLayout {
         id: content
-        anchors.fill: parent
+        x: card.contentLeftInset
+        y: card.contentTopInset
         spacing: Style.space(16)
 
-        Text {
-          visible: root.title !== ""
-          text: root.title.toUpperCase()
-          color: root.onScrimDim
-          font.family: root.fontFamily
-          font.pixelSize: Style.font.caption
-          font.bold: true
-          font.letterSpacing: 2
-          Layout.fillWidth: true
-          horizontalAlignment: Text.AlignHCenter
-        }
-
-        Row {
-          spacing: Style.space(48)
+        // What Copy captures. Painted in the card's own color so the image
+        // reads the same pasted anywhere.
+        Rectangle {
+          id: results
+          color: root.background
+          radius: Style.cornerRadius
+          implicitWidth: resultsColumn.implicitWidth + Style.space(16) * 2
+          implicitHeight: resultsColumn.implicitHeight + Style.space(16) * 2
           Layout.alignment: Qt.AlignHCenter
 
-          SpeedDial {
-            id: leftDial
-            label: root.leftLabel
-            value: root.leftValue
-            live: root.leftLive
-          }
+          ColumnLayout {
+            id: resultsColumn
+            anchors.centerIn: parent
+            spacing: Style.space(16)
 
-          SpeedDial {
-            id: rightDial
-            label: root.rightLabel
-            value: root.rightValue
-            live: root.rightLive
+            Text {
+              visible: root.title !== ""
+              text: root.title.toUpperCase()
+              color: root.foregroundDim
+              font.family: root.fontFamily
+              font.pixelSize: Style.font.caption
+              font.bold: true
+              font.letterSpacing: 2
+              Layout.fillWidth: true
+              horizontalAlignment: Text.AlignHCenter
+            }
+
+            Row {
+              spacing: Style.space(48)
+              Layout.alignment: Qt.AlignHCenter
+
+              SpeedDial {
+                id: leftDial
+                label: root.leftLabel
+                value: root.leftValue
+                live: root.leftLive
+              }
+
+              SpeedDial {
+                id: rightDial
+                label: root.rightLabel
+                value: root.rightValue
+                live: root.rightLive
+              }
+            }
           }
         }
 
-        // Centered on the dial pair. Fades rather than unmounts while a run
-        // is in flight, so the cluster never shifts.
-        Button {
-          text: "Run Again"
-          tooltipText: root.runAgainTooltip
-          bordered: true
+        // Fades rather than unmounts while a run is in flight, so the card
+        // never shifts.
+        Row {
+          spacing: Style.space(12)
+          Layout.alignment: Qt.AlignHCenter
           enabled: !root.running
           opacity: root.running ? 0 : 1
-          foreground: root.onScrim
-          fontFamily: root.fontFamily
-          fontSize: Style.font.bodySmall
-          horizontalPadding: Style.space(14)
-          verticalPadding: Style.space(4)
-          Layout.alignment: Qt.AlignHCenter
-          onClicked: root.runAgainRequested()
 
           Behavior on opacity {
             NumberAnimation { duration: 240; easing.type: Easing.OutCubic }
+          }
+
+          Button {
+            text: "Run Again"
+            tooltipText: root.runAgainTooltip
+            bordered: true
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+            fontSize: Style.font.bodySmall
+            horizontalPadding: Style.space(14)
+            verticalPadding: Style.space(4)
+            onClicked: root.runAgainRequested()
+          }
+
+          Button {
+            text: root.copied ? "Copied" : "Copy"
+            tooltipText: "Copy the results as an image"
+            bordered: true
+            visible: !root.failed
+            foreground: root.foreground
+            fontFamily: root.fontFamily
+            fontSize: Style.font.bodySmall
+            horizontalPadding: Style.space(14)
+            verticalPadding: Style.space(4)
+            onClicked: root.copyResults()
           }
         }
 
         Text {
           visible: root.failed
           text: root.error
-          color: root.onScrimUrgent
+          color: Color.urgent
           font.family: root.fontFamily
           font.pixelSize: Style.font.bodySmall
           wrapMode: Text.Wrap
@@ -196,7 +256,7 @@ PanelWindow {
     }
   }
 
-  // One floating cluster dial: an open 270° scale with the gap at the
+  // One cluster dial: an open 270° scale with the gap at the
   // bottom, a faint tick ring, a glowing accent value arc, a hubless needle
   // that fades toward the pivot, and a digital readout in the middle. All
   // writes to the needle funnel through `shown` so the ignition sweep and
@@ -215,9 +275,9 @@ PanelWindow {
     readonly property int tickCount: 46
     readonly property real arcWidth: Style.space(4)
     readonly property real arcRadius: diameter / 2 - arcWidth
-    readonly property color trackColor: Qt.rgba(1, 1, 1, 0.14)
-    readonly property color minorTickColor: Qt.rgba(1, 1, 1, 0.12)
-    readonly property color majorTickColor: Qt.rgba(1, 1, 1, 0.3)
+    readonly property color trackColor: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.14)
+    readonly property color minorTickColor: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.12)
+    readonly property color majorTickColor: Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.3)
     // The dial that isn't measuring yet sits dimmed until it gets a figure.
     readonly property bool engaged: live || value > 0
 
@@ -340,8 +400,7 @@ PanelWindow {
       }
     }
 
-    // Hubless needle: a slender sliver that fades out toward the pivot, so
-    // it reads as floating like the rest of the cluster.
+    // Hubless needle: a slender sliver that fades out toward the pivot.
     Item {
       anchors.fill: parent
       rotation: dial.dialStart + dial.fraction * dial.dialSweep - 270
@@ -376,7 +435,7 @@ PanelWindow {
         text: dial.reading < 10
           ? dial.reading.toLocaleString(Qt.locale(), 'f', 1)
           : Math.round(dial.reading).toLocaleString(Qt.locale(), 'f', 0)
-        color: root.onScrim
+        color: root.foreground
         font.family: root.fontFamily
         font.pixelSize: Style.font.display
         font.bold: true
@@ -385,7 +444,7 @@ PanelWindow {
       Text {
         anchors.horizontalCenter: parent.horizontalCenter
         text: root.unit
-        color: root.onScrimDim
+        color: root.foregroundDim
         font.family: root.fontFamily
         font.pixelSize: Style.font.caption
       }
@@ -397,7 +456,7 @@ PanelWindow {
       anchors.horizontalCenter: parent.horizontalCenter
       anchors.bottom: parent.bottom
       text: dial.label
-      color: root.onScrimDim
+      color: root.foregroundDim
       font.family: root.fontFamily
       font.pixelSize: Style.font.caption
       font.bold: true

@@ -15,20 +15,21 @@ nobody names is dead code.
 | `background/` | `omarchy.background` | wallpaper layer | service |
 | `polkit/` | `omarchy.polkit` | authentication agent | service |
 | `services/media/` | `omarchy.media` | shared MPRIS/PipeWire state | service |
+| `services/discord/` | `omarchy.discord` | unread Discord mentions and the stage dock chat widget, via the ShellMentions Vencord plugin | service |
 | `services/nightlight/` | `omarchy.nightlight` | wlsunset control | service |
-| `services/battery/` | `omarchy.battery` | battery watch | service |
-| `clipboard/` | `omarchy.clipboard` | clipboard history overlay | kept loaded (owns the capture watchers) |
+| `clipboard/` | `omarchy.clipboard`, `omarchy.clipboard-bar` | clipboard history over cliphist: the menu's search overlay and the bar dropdown | overlay kept loaded; dropdown declared in `Bar.qml` |
 | `emojis/` | `omarchy.emojis` | emoji picker | kept loaded |
 | `image-picker/` | `omarchy.image-picker` | image selector for `omarchy-menu-images` | kept loaded |
 | `osd/` | `omarchy.osd` | volume/brightness overlay | kept loaded |
-| `panels/audio/` … `power/` | `omarchy.audio`, `omarchy.bluetooth`, `omarchy.network`, `omarchy.monitor`, `omarchy.power`, `omarchy.weather`, `omarchy.clock` | bar widgets with popups | declared in `Bar.qml` |
-| `agents/` | `omarchy.agents` | AI agent usage panel | declared in `Bar.qml` |
-| `panels/speedtest/`, `panels/disk-speedtest/` | `omarchy.speedtest`, `omarchy.disk-speedtest` | one-shot panels | built on summon, torn down on hide |
+| `stagedock/` | — | edge tabs for windows docked by the mango stage layout | kept loaded (watches `mmsg watch all-clients`) |
+| `lock/` | `omarchy.lock` | session lock | service |
+| `calculator/` | `omarchy.calculator` | calculator overlay | kept loaded (keeps its history) |
+| `panels/audio/` … `power/` | `omarchy.audio`, `omarchy.bluetooth`, `omarchy.network`, `omarchy.tailscale`, `omarchy.protonvpn`, `omarchy.monitor`, `omarchy.power`, `omarchy.weather`, `omarchy.clock` | bar widgets with popups | declared in `Bar.qml` |
+| `panels/speedtest/` | `omarchy.speedtest` | one-shot panel | built on summon, torn down on hide |
+| `panels/keybindings/` | `omarchy.keybindings` | keybinding cheat sheet | built on summon, torn down on hide |
 | `dev-gallery/` | `omarchy.dev-gallery` | component gallery | built on summon |
 
-Not mounted, kept from upstream: `lock/`, `services/idle/`, `panels/wifiqr/`,
-`panels/tailscale/`, `panels/dropbox/`, `services/media/BarWidget.qml`, and the
-`ActiveWindow`, `Microphone`, `Spacer` and `SystemUpdate` widgets. See
+Not mounted, kept from upstream: `services/idle/`. See
 [../README.md](../README.md#what-is-not-wired-up).
 
 ## What the host hands a part
@@ -44,3 +45,11 @@ A panel or overlay the host summons implements `open(payloadJson)`, `close()`
 and an `opened` property. A bar widget extends [`Ui/BarWidget`](../Ui/BarWidget.qml)
 or [`Ui/Panel`](../Ui/Panel.qml) and is handed `bar` and `moduleName` by its
 slot; anything else it needs is set where `Bar.qml` declares it.
+
+Browser media dock controls are shared per browser instance: every window using the
+same MPRIS player shows its advertised track and controls that player. Separate
+instances are matched by process when several players match the app id; individual
+windows or tabs within one instance do not have independent playback controls.
+
+Parts that read another process (`stagedock/`, `services/discord/`,
+`panels/network/`) follow the wire formats in [../CONTRACTS.md](../CONTRACTS.md).

@@ -13,9 +13,9 @@
         home.packages = [ pkgs.qalculate-gtk ];
 
         # A calculator is a glance, not a tile. The binary carries both spellings
-        # of its name (argv0 and the GApplication id), and mango matches appid as
+        # of its name (argv0 and the GApplication id), and mango matches app_id as
         # a PCRE, so the rule takes whichever one the toplevel announces.
-        mango.windowRules = [ "appid:(qalculate-gtk|io\\.github\\.Qalculate),isfloating:1" ];
+        mango.windowRules = [ "app_id:(qalculate-gtk|io\\.github\\.Qalculate),is_floating:1" ];
 
         # Out of the box qalculate opens as a CAS: a function keypad beside the number
         # pad, RPN stack, conversion pane, three-line input and a result view that eats

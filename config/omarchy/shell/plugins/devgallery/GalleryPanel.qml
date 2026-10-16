@@ -1648,7 +1648,7 @@ Item {
                   options: [
                     { value: "Clock", label: "Clock", description: "Time + date display" },
                     { value: "Weather", label: "Weather", description: "Local conditions and forecast" },
-                    { value: "omarchy.power", label: "Power", description: "Charge level + power profile" },
+                    { value: "omarchy.power", label: "Power", description: "Power profile" },
                     { value: "audio", label: "Audio", description: "Output sink + volume" },
                     { value: "network", label: "Network", description: "Wi-Fi + ethernet status" },
                     { value: "bluetooth", label: "Bluetooth", description: "Paired and nearby devices" },

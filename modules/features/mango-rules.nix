@@ -15,12 +15,12 @@
       options.mango.windowRules = lib.mkOption {
         type = lib.types.listOf lib.types.str;
         default = [ ];
-        example = [ "appid:qalculate-gtk,isfloating:1" ];
-        description = "windowrule= bodies to hand mango, one per line.";
+        example = [ "app_id:qalculate-gtk,is_floating:1" ];
+        description = "window_rule= bodies to hand mango, one per line.";
       };
 
       config.home.file.".config/mango-apps.conf".text =
         "# Generated from the apps' mango.windowRules - edit the app module, not this file.\n"
-        + lib.concatMapStrings (rule: "windowrule=${rule}\n") config.mango.windowRules;
+        + lib.concatMapStrings (rule: "window_rule=${rule}\n") config.mango.windowRules;
     };
 }

@@ -318,7 +318,7 @@ flock -u 9
 
 post_theme_commands=(
   # Trimmed for this checkout: only the hooks whose targets exist here and
-  # whose helper is vendored in bin/. Upstream also retints hyprctl, opencode,
+  # whose helper is vendored in bin/. Upstream also retints hyprctl,
   # helix, foot, gnome, pi, browser, vscode, obsidian and RGB keyboards.
   omarchy-restart-terminal
   omarchy-restart-btop
@@ -326,11 +326,16 @@ post_theme_commands=(
   omarchy-theme-set-claude
   omarchy-theme-set-nvim
   omarchy-theme-set-vesktop
+  omarchy-theme-set-freetube
   omarchy-theme-set-cosmic
 )
 
 if [[ $THEME_HEADLESS != "1" ]]; then
   run_parallel "${post_theme_commands[@]}"
+
+  # Same-mode palette changes need a refresh; only signal clients with a handler.
+  pkill --signal SIGUSR2 --require-handler --uid "$(id -u)" \
+    -x '\.?opencode(-wrapp.*)?' 2>/dev/null || true
 
   # Call hook on theme set
   omarchy-hook theme-set "$THEME_NAME" >/dev/null

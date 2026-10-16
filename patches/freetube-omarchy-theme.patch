@@ -1,0 +1,46 @@
+--- a/src/main/index.js
++++ b/src/main/index.js
+@@ -17,7 +17,7 @@
+ } from '../constants'
+ import * as baseHandlers from '../datastores/handlers/base'
+ import { extractExpiryTimestamp, ImageCache } from './ImageCache'
+-import { constants as fsConstants, existsSync } from 'fs'
++import { constants as fsConstants, existsSync, watch } from 'fs'
+ import asyncFs from 'fs/promises'
+ import { promisify } from 'util'
+ import { brotliDecompress } from 'zlib'
+@@ -1137,6 +1137,34 @@
+       setMenu()
+     }
+ 
++    // omarchy-theme-set-freetube rewrites omarchy.css on every theme change.
++    // Watching the directory survives its atomic rename, so open windows
++    // retint without a restart.
++    const omarchyCssPath = path.join(userDataPath, 'omarchy.css')
++    let omarchyCssKey = null
++    const applyOmarchyCss = async () => {
++      const css = await asyncFs.readFile(omarchyCssPath, 'utf8').catch(() => null)
++      if (newWindow.isDestroyed()) {
++        return
++      }
++      const previousKey = omarchyCssKey
++      omarchyCssKey = css === null ? null : await newWindow.webContents.insertCSS(css)
++      if (previousKey !== null) {
++        await newWindow.webContents.removeInsertedCSS(previousKey)
++      }
++    }
++    newWindow.webContents.on('did-finish-load', () => {
++      // Inserted sheets die with the document they were inserted into.
++      omarchyCssKey = null
++      applyOmarchyCss().catch(console.error)
++    })
++    const omarchyCssWatcher = watch(userDataPath, (_, filename) => {
++      if (filename === 'omarchy.css') {
++        applyOmarchyCss().catch(console.error)
++      }
++    })
++    newWindow.on('closed', () => omarchyCssWatcher.close())
++
+     // load root file/url
+     if (windowStartupUrl != null) {
+       newWindow.loadURL(windowStartupUrl)

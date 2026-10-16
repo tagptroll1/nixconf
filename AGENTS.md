@@ -47,8 +47,8 @@ file from `@claude-knowledge/projects/nixos-dotfiles/memory/`. Load only relevan
 - `omarchy-menu-ipc.md` - menu IPC requires both menu name and JSON argument.
 - `apply-changes-where-they-take-effect.md` - live shell config can override repo default
   wholesale; edit source that actually renders.
-- `quickshell-dev-loop.md` - no hot reload, duplicate IPC targets can segfault, second
-  instance cannot reach tray.
+- `quickshell-dev-loop.md` - hot-reloads on save (check `qs log`), duplicate IPC targets
+  can segfault, second instance cannot reach tray.
 - `migrate-off-omarchy-bloat.md` - replace Omarchy wrappers with direct primitives.
 
 If index and detailed file disagree, detailed file wins. Verify time-sensitive state in

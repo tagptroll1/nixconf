@@ -8,10 +8,14 @@ import qs.Ui
 // connection under test.
 //
 // Standalone panel plugin: summoning it starts a fresh run, dismissing it
-// stops the traffic, so the download workers never keep saturating the link
-// behind a closed overlay. The payload may carry the connection's display
-// name -- {"connection": "MyWifi"} -- and the panel looks it up itself via
+// kills the test, so it never keeps saturating the link behind a closed
+// overlay. The payload may carry the connection's display name --
+// {"connection": "MyWifi"} -- and the panel looks it up itself via
 // omarchy-network-status when the caller doesn't know it.
+//
+// speedtest-go (our fork) streams {"type":"download"|"upload","mbps":N}
+// while it runs and ends with its full result line, whose dl_speed and
+// ul_speed (bytes/s) replace the last live reading.
 Item {
   id: root
 
@@ -25,17 +29,9 @@ Item {
   property bool pendingRun: false
   property string phase: ""        // "down" | "up" | ""
   property string stderrText: ""
-  property string downloadMbps: ""
-  property string uploadMbps: ""
+  property real downloadValue: 0
+  property real uploadValue: 0
   property string error: ""
-
-  readonly property real downloadValue: toMbps(downloadMbps)
-  readonly property real uploadValue: toMbps(uploadMbps)
-
-  function toMbps(raw) {
-    var value = parseFloat(raw)
-    return isFinite(value) && value > 0 ? value : 0
-  }
 
   function open(payloadJson) {
     var payload = {}
@@ -49,9 +45,6 @@ Item {
   function close() {
     root.opened = false
     root.pendingRun = false
-    phaseTimer.stop()
-    // Clear the phase before killing the process: onExited advances to the
-    // upload phase when it still reads "down".
     root.phase = ""
     root.running = false
     if (speedTestProc.running) {
@@ -72,12 +65,21 @@ Item {
     statusProc.running = true
   }
 
-  function updateSpeedTestLine(line) {
-    var value = parseFloat(line)
-    if (!isFinite(value) || value < 0) return
+  function readLine(line) {
+    var event = null
+    try { event = JSON.parse(line) } catch (e) { return }
+    if (!event) return
 
-    if (phase === "down") downloadMbps = String(value)
-    else if (phase === "up") uploadMbps = String(value)
+    if (event.type === "download") {
+      root.phase = "down"
+      root.downloadValue = Math.max(0, Number(event.mbps) || 0)
+    } else if (event.type === "upload") {
+      root.phase = "up"
+      root.uploadValue = Math.max(0, Number(event.mbps) || 0)
+    } else if (event.server) {
+      root.downloadValue = Math.max(0, (Number(event.server.dl_speed) || 0) * 8 / 1e6)
+      root.uploadValue = Math.max(0, (Number(event.server.ul_speed) || 0) * 8 / 1e6)
+    }
   }
 
   function runSpeedTest() {
@@ -88,45 +90,20 @@ Item {
       return
     }
     error = ""
-    downloadMbps = ""
-    uploadMbps = ""
-    running = true
-    startPhase("down")
-  }
-
-  function startPhase(nextPhase) {
-    expectedStop = false
-    phase = nextPhase
     stderrText = ""
-    speedTestProc.command = ["omarchy-network-speedtest", nextPhase]
-    speedTestProc.running = true
-    phaseTimer.restart()
-  }
-
-  function stopPhase() {
-    phaseTimer.stop()
-    if (speedTestProc.running) {
-      expectedStop = true
-      speedTestProc.running = false
-      return
-    }
-    finishPhase()
-  }
-
-  function finishPhase() {
-    if (phase === "down") {
-      startPhase("up")
-      return
-    }
-
-    phase = ""
-    running = false
+    downloadValue = 0
+    uploadValue = 0
     expectedStop = false
+    running = true
+    // Server selection and ping come first; the download dial is next up.
+    phase = "down"
+    speedTestProc.running = true
   }
 
   Process {
     id: speedTestProc
-    stdout: SplitParser { onRead: function(line) { root.updateSpeedTestLine(line) } }
+    command: ["speedtest-go", "--jsonl", "--progress"]
+    stdout: SplitParser { onRead: function(line) { root.readLine(line) } }
     // Exit and stream-finished have no guaranteed order: when a failed exit
     // beat the collector and published the generic message, replace it with
     // the specific one once it lands.
@@ -138,8 +115,6 @@ Item {
       }
     }
     onExited: function(exitCode) {
-      phaseTimer.stop()
-
       if (root.pendingRun) {
         root.pendingRun = false
         root.expectedStop = false
@@ -147,23 +122,11 @@ Item {
         return
       }
 
-      if (!root.expectedStop && exitCode !== 0) {
-        root.error = root.stderrText || "Speed test failed"
-        root.phase = ""
-        root.running = false
-        return
-      }
-
+      if (!root.expectedStop && exitCode !== 0) root.error = root.stderrText || "Speed test failed"
       root.expectedStop = false
-      root.finishPhase()
+      root.phase = ""
+      root.running = false
     }
-  }
-
-  Timer {
-    id: phaseTimer
-    interval: 5000
-    repeat: false
-    onTriggered: root.stopPhase()
   }
 
   // Names the connection under test when the summoner didn't. First tab
@@ -187,7 +150,7 @@ Item {
     title: root.connectionName
     leftLabel: "DOWNLOAD"
     rightLabel: "UPLOAD"
-    runAgainTooltip: "Measure again via fast.com"
+    runAgainTooltip: "Measure again via speedtest.net"
     running: root.running
     leftValue: root.downloadValue
     rightValue: root.uploadValue

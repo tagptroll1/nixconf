@@ -13,6 +13,10 @@ Item {
   property var playerStartedAt: ({})
   property var pendingTrackOsd: null
   property int playSerial: 0
+  // Bus name -> owner pid and its ancestors, so a window can claim the
+  // player its own process (or a child of it) registered.
+  property var busPids: ({})
+  readonly property var pidQueue: []
 
   readonly property var players: Mpris.players ? Mpris.players.values : []
   readonly property var nodes: Pipewire.nodes ? Pipewire.nodes.values : []
@@ -93,6 +97,59 @@ Item {
       if (playerKey(p) === key) return p
     }
     return null
+  }
+
+  // Null until looked up. Called from bindings, so the lookup starts later.
+  function pidChain(dbusName) {
+    var name = String(dbusName || "")
+    if (name === "") return null
+    var chain = busPids[name]
+    if (chain !== undefined) return chain
+    if (pidQueue.indexOf(name) === -1) {
+      pidQueue.push(name)
+      Qt.callLater(root.resolveNextPid)
+    }
+    return null
+  }
+
+  function resolveNextPid() {
+    if (pidResolver.running || pidResolver.waiting || pidQueue.length === 0) return
+    pidResolver.name = pidQueue[0]
+    pidResolver.waiting = true
+    pidResolver.running = true
+  }
+
+  // A player gone by now may come back under the same name with a new owner.
+  function storePidChain(name, text) {
+    pidQueue.shift()
+    pidResolver.waiting = false
+    if (playerForBus(name)) {
+      var next = Object.assign({}, busPids)
+      next[name] = String(text).trim().split(/\s+/).filter(function(s) { return s !== "" }).map(Number)
+      busPids = next
+    }
+    Qt.callLater(root.resolveNextPid)
+  }
+
+  function playerForBus(name) {
+    for (var i = 0; i < players.length; i++) {
+      if (players[i] && players[i].dbusName === name) return players[i]
+    }
+    return null
+  }
+
+  function prunePids() {
+    var alive = {}
+    for (var i = 0; i < players.length; i++) {
+      if (players[i] && players[i].dbusName) alive[players[i].dbusName] = true
+    }
+    var next = {}
+    var changed = false
+    for (var name in busPids) {
+      if (alive[name]) next[name] = busPids[name]
+      else changed = true
+    }
+    if (changed) busPids = next
   }
 
   function playerOrder(player, fallback) {
@@ -435,7 +492,29 @@ Item {
   // isPlaying state: onPlayersChanged covers players appearing/disappearing,
   // and the Instantiator wires isPlayingChanged for each live player.
   Component.onCompleted: root.syncPlayingOrder()
-  onPlayersChanged: root.syncPlayingOrder()
+  onPlayersChanged: {
+    root.syncPlayingOrder()
+    root.prunePids()
+  }
+
+  Process {
+    id: pidResolver
+
+    property string name: ""
+    // Output and exit arrive in either order; the next lookup waits for both.
+    property bool waiting: false
+
+    // PPid from status, since the comm field in stat may hold spaces.
+    command: ["sh", "-c",
+      "pid=$(busctl --user call org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus GetConnectionUnixProcessID s \"$1\" 2>/dev/null | cut -d' ' -f2)\n"
+      + "while [ \"${pid:-0}\" -gt 1 ] 2>/dev/null; do printf '%s ' \"$pid\"; pid=$(awk '/^PPid:/ { print $2 }' /proc/$pid/status); done",
+      "sh", name]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.storePidChain(pidResolver.name, text)
+    }
+    onExited: Qt.callLater(root.resolveNextPid)
+  }
 
   Instantiator {
     model: root.players

@@ -10,9 +10,22 @@
       { pkgs, ... }:
       let
         configPath = ../../config;
+        # Vencord built with our userplugins (shell mention shelf).
+        vencord = pkgs.vencord.overrideAttrs (old: {
+          # preBuild, not postPatch: postPatch feeds the pnpmDeps FOD.
+          preBuild = (old.preBuild or "") + ''
+            cp -r ${configPath + /vesktop/userplugins} src/userplugins
+            chmod -R u+w src/userplugins
+          '';
+        });
       in
       {
-        home.packages = [ pkgs.vesktop ];
+        home.packages = [
+          (pkgs.vesktop.override {
+            withSystemVencord = true;
+            inherit vencord;
+          })
+        ];
         home.file.".config/discord/settings.json".source = (configPath + /discord/settings.json);
       };
   };

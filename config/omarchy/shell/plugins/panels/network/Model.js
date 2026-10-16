@@ -72,20 +72,81 @@ function bandTooltip(band) {
   return "Stay on " + bandLabel(band)
 }
 
-function parseBandStatus(raw) {
-  var next = parseKeyValue(raw)
-  var tokens = String(next.available || "").split(" ")
-  var available = []
+// The band parsers read `LC_ALL=C nmcli -e no -g ...` output. C locale keeps
+// state words like "connected" matchable; `-e no` leaves ':' in an SSID
+// unescaped, so any field queried last can be rejoined verbatim.
 
-  for (var i = 0; i < tokens.length; i++) {
-    if (tokens[i] !== "") available.push(tokens[i])
+// First connected Wi-Fi device from `-g DEVICE,TYPE,STATE,CON-UUID device
+// status`. The UUID names the active profile exactly, where a profile name
+// may be shared by several.
+function wifiDeviceFrom(text) {
+  var lines = String(text || "").split("\n")
+  for (var i = 0; i < lines.length; i++) {
+    var f = lines[i].split(":")
+    if (f[1] === "wifi" && f[2] === "connected" && f[3]) return { device: f[0], uuid: f[3] }
   }
+  return null
+}
 
-  return {
-    band: next.band || "",
-    selected: next.selected || "auto",
-    available: available
+// 802-11-wireless.band values. "6GHz" needs NetworkManager >= 1.44.
+function bandFromNm(value) {
+  if (value === "bg") return "2.4"
+  if (value === "a") return "5"
+  if (value === "6GHz") return "6"
+  return "auto"
+}
+
+function nmFromBand(band) {
+  if (band === "2.4") return "bg"
+  if (band === "5") return "a"
+  if (band === "6") return "6GHz"
+  return ""
+}
+
+// Boundaries match formatHeaderFreq so the header and the pills agree.
+// Accepts nmcli's "5500 MHz".
+function bandForFreq(mhz) {
+  var v = parseInt(mhz, 10)
+  if (v >= 2400 && v < 2500) return "2.4"
+  if (v >= 4900 && v < 5925) return "5"
+  if (v >= 5925 && v < 7125) return "6"
+  return ""
+}
+
+// Rows of `-g IN-USE,FREQ,SSID dev wifi list ifname <dev> --rescan no`.
+function wifiListRows(text) {
+  var rows = []
+  var lines = String(text || "").split("\n")
+  for (var i = 0; i < lines.length; i++) {
+    var f = lines[i].split(":")
+    if (f.length < 3) continue
+    rows.push({ inUse: f[0] === "*", freq: f[1], ssid: f.slice(2).join(":") })
   }
+  return rows
+}
+
+// The in-use row is the associated BSSID, so its frequency is the live band.
+function linkFrom(rows) {
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].inUse && rows[i].ssid !== "") return { ssid: rows[i].ssid, freq: rows[i].freq }
+  }
+  return null
+}
+
+// Every band the SSID answers on, low to high. The current band is always
+// included: a weak radio drops out of plenty of scans, and the band in use
+// must never vanish from its own options. A band the AP does not answer on is
+// never offered, since pinning it would strand the connection.
+function availableBands(rows, ssid, current) {
+  var order = ["2.4", "5", "6"]
+  var seen = {}
+  if (current) seen[current] = true
+  for (var i = 0; i < rows.length; i++) {
+    if (rows[i].ssid !== ssid) continue
+    var band = bandForFreq(rows[i].freq)
+    if (band) seen[band] = true
+  }
+  return order.filter(function(band) { return seen[band] })
 }
 
 function decodeIwSsid(value) {
@@ -358,7 +419,13 @@ if (typeof module !== "undefined") {
     bandLabel: bandLabel,
     bandSectionTitle: bandSectionTitle,
     bandTooltip: bandTooltip,
-    parseBandStatus: parseBandStatus,
+    wifiDeviceFrom: wifiDeviceFrom,
+    bandFromNm: bandFromNm,
+    nmFromBand: nmFromBand,
+    bandForFreq: bandForFreq,
+    wifiListRows: wifiListRows,
+    linkFrom: linkFrom,
+    availableBands: availableBands,
     decodeIwSsid: decodeIwSsid,
     parseKeyValue: parseKeyValue,
     throughputState: throughputState,

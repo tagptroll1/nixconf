@@ -1,0 +1,163 @@
+{
+  "about": "A fresh renderer (reload or gateway reconnect) starts with an empty cache and chat, refills instead of showing stale state, and merges the refetch with live messages",
+  "cases": [
+    {
+      "name": "Empty cache with live badges asks for DM and guild refills",
+      "kind": "mentions",
+      "input": {
+        "cache": [],
+        "channels": [
+          {
+            "id": "10",
+            "count": 1,
+            "ack": "1100",
+            "private": true
+          },
+          {
+            "id": "11",
+            "count": 2,
+            "ack": null,
+            "private": true
+          },
+          {
+            "id": "20",
+            "count": 3,
+            "ack": null,
+            "private": false
+          }
+        ]
+      },
+      "expect": {
+        "total": 6,
+        "picked": [],
+        "keep": [],
+        "refillDms": [
+          "10",
+          "11"
+        ],
+        "guildMissing": true
+      }
+    },
+    {
+      "name": "Refetch into an empty chat keeps the newest, oldest first",
+      "kind": "chat",
+      "input": {
+        "chat": [],
+        "messages": [
+          {
+            "id": "1103",
+            "channel_id": "10"
+          },
+          {
+            "id": "1102",
+            "channel_id": "10"
+          },
+          {
+            "id": "1101",
+            "channel_id": "10"
+          }
+        ],
+        "channelId": "10",
+        "size": 2
+      },
+      "expect": [
+        {
+          "id": "1102",
+          "channel_id": "10"
+        },
+        {
+          "id": "1103",
+          "channel_id": "10"
+        }
+      ]
+    },
+    {
+      "name": "Live message that raced the refetch still lands",
+      "kind": "chat",
+      "input": {
+        "chat": [
+          {
+            "id": "1104",
+            "channel_id": "10"
+          }
+        ],
+        "messages": [
+          {
+            "id": "1103",
+            "channel_id": "10"
+          },
+          {
+            "id": "1102",
+            "channel_id": "10"
+          }
+        ],
+        "channelId": "10",
+        "size": 2
+      },
+      "expect": [
+        {
+          "id": "1103",
+          "channel_id": "10"
+        },
+        {
+          "id": "1104",
+          "channel_id": "10"
+        }
+      ]
+    },
+    {
+      "name": "Messages for another channel are ignored",
+      "kind": "chat",
+      "input": {
+        "chat": [],
+        "messages": [
+          {
+            "id": "2201",
+            "channel_id": "20"
+          },
+          {
+            "id": "1101",
+            "channel_id": "10"
+          }
+        ],
+        "channelId": "10",
+        "size": 2
+      },
+      "expect": [
+        {
+          "id": "1101",
+          "channel_id": "10"
+        }
+      ]
+    },
+    {
+      "name": "Edited copy replaces the original",
+      "kind": "chat",
+      "input": {
+        "chat": [
+          {
+            "id": "1101",
+            "channel_id": "10",
+            "content": "before"
+          }
+        ],
+        "messages": [
+          {
+            "id": "1101",
+            "channel_id": "10",
+            "content": "after"
+          }
+        ],
+        "channelId": "10",
+        "size": 2
+      },
+      "expect": [
+        {
+          "id": "1101",
+          "channel_id": "10",
+          "content": "after"
+        }
+      ]
+    }
+  ]
+}

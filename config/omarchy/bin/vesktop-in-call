@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Exit 0 while vesktop is in a voice call. Its playback stream outlives calls
+# (so wayland-pipewire-idle-inhibit ignores it), but its mic stream only exists
+# during one, muted included. The shell holds idle off on this.
+pw-dump | jq -e 'any(.[]; .type == "PipeWire:Interface:Node"
+  and .info.props["application.name"] == "vesktop"
+  and .info.props["media.class"] == "Stream/Input/Audio")' >/dev/null

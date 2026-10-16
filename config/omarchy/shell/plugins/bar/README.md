@@ -10,8 +10,8 @@ changing the bar means editing that file.
 
 ```
 Left    menu · workspaces
-Center  indicators · [clock] · keyboard-layout · weather
-Right   tray · agents · bluetooth · network · audio · monitor · power
+Center  indicators · [clock] · keyboard-layout · weather · mango-fork
+Right   tray · bluetooth · network · audio · monitor · clipboard · power
 ```
 
 The clock is pinned to the exact center of the screen and the rest of the center
@@ -42,13 +42,14 @@ Everything else in `Bar.qml` is runtime plumbing the widgets depend on:
 | `omarchy.clock` | date/time label, calendar popup with ISO weeks | left = popup · right = cycle format |
 | `omarchy.keyboard-layout` | current layout, hidden while there is only one | left = next layout |
 | `omarchy.weather` | conditions icon, forecast popup | left = popup · right = notification |
+| `omarchy.mango-fork` | mangowm/mango releases missing from tagptroll1/mango, checked every 30 min, hidden at 0; popup lists them with description and commits | left = popup |
 | `omarchy.tray` | system tray, drawer reveals on hover | hover = drawer · right = manage |
-| `omarchy.agents` | AI agent usage and limits | left = panel · right = launch agent |
 | `omarchy.bluetooth` | devices, connect/disconnect, battery | left = popup · right = toggle radio |
-| `omarchy.network` | Wi-Fi scan and connect, DNS | left = popup |
+| `omarchy.network` | Wi-Fi scan and connect | left = popup |
 | `omarchy.audio` | master slider, output picker, per-app mixer | left = popup · right = mute · scroll = volume |
 | `omarchy.monitor` | brightness and display controls | left = popup |
-| `omarchy.power` | AC/battery state, power profiles, system info | left = popup |
+| `omarchy.clipboard-bar` | clipboard history dropdown: paste an entry, x or 󰅙 removes one | left = popup |
+| `omarchy.power` | system: power profile, then suspend/hibernate/logout/reboot/shutdown | left = popup |
 
 The clock's two label formats are set where `Bar.qml` declares it; right click
 walks the ring for the session and the declared format is what it starts on

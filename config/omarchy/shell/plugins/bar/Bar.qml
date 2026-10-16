@@ -6,12 +6,14 @@ import qs.Ui
 import "BarModel.js" as BarModel
 import "widgets"
 import "../menu" as MenuPlugin
-import "../agents" as AgentsPlugin
+import "../clipboard" as ClipboardPlugin
 import "../panels/clock" as ClockPlugin
 import "../panels/weather" as WeatherPlugin
 import "../panels/audio" as AudioPlugin
 import "../panels/bluetooth" as BluetoothPlugin
 import "../panels/network" as NetworkPlugin
+import "../panels/tailscale" as TailscalePlugin
+import "../panels/protonvpn" as ProtonVpnPlugin
 import "../panels/monitor" as MonitorPlugin
 import "../panels/power" as PowerPlugin
 
@@ -457,7 +459,7 @@ Item {
 
     IdleInhibitor {
       window: barWindow
-      enabled: root.idleService?.stayAwake === true
+      enabled: root.idleService?.inhibit === true
     }
 
     ScreenMoveRemap {
@@ -623,6 +625,12 @@ Item {
         moduleName: "omarchy.weather"
         widget: Component { WeatherPlugin.BarWidget { } }
       }
+
+      Slot {
+        region: "center"
+        moduleName: "omarchy.mango-fork"
+        widget: Component { MangoFork { } }
+      }
     }
   }
 
@@ -633,12 +641,6 @@ Item {
       region: "right"
       moduleName: "omarchy.tray"
       widget: Component { Tray { } }
-    }
-
-    Slot {
-      region: "right"
-      moduleName: "omarchy.agents"
-      widget: Component { AgentsPlugin.Panel { } }
     }
 
     Slot {
@@ -655,6 +657,18 @@ Item {
 
     Slot {
       region: "right"
+      moduleName: "omarchy.tailscale"
+      widget: Component { TailscalePlugin.Panel { } }
+    }
+
+    Slot {
+      region: "right"
+      moduleName: "omarchy.protonvpn"
+      widget: Component { ProtonVpnPlugin.Panel { } }
+    }
+
+    Slot {
+      region: "right"
       moduleName: "omarchy.audio"
       widget: Component { AudioPlugin.Panel { } }
     }
@@ -663,6 +677,12 @@ Item {
       region: "right"
       moduleName: "omarchy.monitor"
       widget: Component { MonitorPlugin.Panel { } }
+    }
+
+    Slot {
+      region: "right"
+      moduleName: "omarchy.clipboard-bar"
+      widget: Component { ClipboardPlugin.BarWidget { } }
     }
 
     Slot {

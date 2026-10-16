@@ -72,6 +72,7 @@ What retints, and how it is hooked up:
 | Claude Code | `omarchy-theme-set-claude` copies `claude.json` to `~/.claude/themes/omarchy.json`, which Claude Code hot-reloads. `omarchyActivateClaudeTheme` in `modules/features/omarchy.nix` runs it once with `--activate` to point `~/.claude/settings.json` at it, stashing whatever theme it replaced in `settings.json.omarchy-previous` |
 | neovim | `default/themed/neovim.lua.tpl` renders the palette as a bare table; `config/nvim/init.lua` `dofile()`s it into `aether.nvim` from `_G.OmarchyTheme()`, falling back to `catppuccin-mocha` when nothing is staged. `omarchy-theme-set-nvim` calls that function over each running instance's socket, so open editors retint without a restart |
 | Vesktop | `default/themed/vesktop.css.tpl` renders the palette as the variable block the vendored [midnight](https://github.com/refact0r/midnight-discord) theme reads (`vendor/midnight-discord/`, MIT, verbatim). `omarchy-theme-set-vesktop` concatenates the two into `~/.config/vesktop/themes/omarchy.css`; Vencord watches that directory and hot-applies, so Discord retints without a restart. Enable `Omarchy` once under `Settings > Themes`. midnight is a dark theme, so a light Omarchy theme comes out readable but not light |
+| FreeTube | `default/themed/freetube.css.tpl` renders the palette as `!important` overrides of the CSS variables FreeTube's own colour pickers set on `<body>`. `omarchy-theme-set-freetube` copies it to `~/.config/FreeTube/omarchy.css`; FreeTube is built with `patches/freetube-omarchy-theme.patch`, which inserts that file into every window and re-inserts it when it changes, so it retints without a restart. The settings-page colour choices are overridden, not removed |
 | COSMIC apps (cosmic-files) | `default/themed/cosmic.ron.tpl` renders the whole libcosmic palette as one file of `### <key>` sections; `omarchy-theme-set-cosmic` splits it into `~/.config/cosmic/com.system76.CosmicTheme.{Dark,Light}/v2/<key>`, sets `CosmicTheme.Mode/v1/is_dark` from the theme's `mode` and points `CosmicTk/v1/icon_theme` at the theme's `icons.theme` (a `Yaru-*` variant, from `yaru-theme`; the two themes naming a grey variant that doesn't exist fall back to `Yaru`/`Yaru-dark`). The config is global, so any libcosmic app follows. libcosmic only takes a live theme change over a dbus signal from the COSMIC settings daemon, which does not run in this session, so the hook relaunches each running app with the command line and working directory it had |
 
 Not wired: librewolf. Upstream only themes Chromium-family browsers, by writing
@@ -104,8 +105,8 @@ Reapply these after any refresh from upstream.
   same directory matches nothing, so every IPC call failed.
 - `bin/omarchy-theme-set`'s `post_theme_commands` is trimmed to the hooks whose
   target exists on this box (terminal, btop, tmux, Claude Code) and extended with
-  the local `omarchy-theme-set-nvim`, `omarchy-theme-set-vesktop` and
-  `omarchy-theme-set-cosmic`. The rest are
+  the local `omarchy-theme-set-nvim`, `omarchy-theme-set-vesktop`,
+  `omarchy-theme-set-freetube` and `omarchy-theme-set-cosmic`. The rest are
   hyprctl/gnome/vscode/obsidian/pi/browser/RGB-keyboard and were dropped rather
   than vendored.
 
@@ -149,7 +150,7 @@ output's tags, focus flag and keyboard layout down it — plus `dispatch` helper
 | workspaces widget | `Quickshell.Hyprland` workspaces | `Mango.tagsFor(screen)`, click dispatches `view,<tag>` |
 | bar's focused output | `Hyprland.focusedMonitor` | `Mango.focusedMonitor` |
 | popup outside-click | `HyprlandFocusGrab` | `PopupWindow.grabFocus` (the compositor's own xdg-popup grab) |
-| corner radius / edge gap | `hyprctl getoption` | `border_radius` / `gappoh` read out of `~/.config/mango/*.conf` |
+| corner radius / edge gap | `hyprctl getoption` | `border_radius` / `gap_outer_horizontal` read out of `~/.config/mango/*.conf` |
 | keyboard layout | `hyprctl devices` + `switchxkblayout` | `Mango.keyboardLayout`, `dispatch switch_keyboard_layout,0` |
 | idle: screensaver window tracking | Hyprland `openwindow`/`closewindow` events | `mmsg watch all-clients`, diffed by client id |
 | idle/lock: lock the session | `omarchy-system-lock` | the lock service in-process via `shell.serviceFor` |
@@ -168,9 +169,9 @@ it is a theme-file key that `Commons/Border.qml` reads, not a compositor call.
 
 Every `omarchy-*` CLI the widgets shell out to that is not in `bin/`. They are
 Arch/Hyprland bash and were not vendored, so most of the menu's actions, weather,
-agents, system-update, tailscale, dropbox, speedtests, clipboard paste, emoji
-insert, theme/background *install* and *remove*, the Wi-Fi band pills
-(`omarchy-network-band`) and the bluetooth/network panels' *write* paths
+clipboard paste, emoji
+insert, theme/background *install* and *remove* and the bluetooth/network
+panels' *write* paths
 are inert. Reading works, since that comes from quickshell's own
 Pipewire/Bluetooth/Networking bindings, plus `bin/omarchy-network-status` for the
 network panel's link details.

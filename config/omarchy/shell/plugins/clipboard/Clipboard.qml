@@ -6,19 +6,24 @@ import qs.Commons
 import qs.Ui
 import "ClipboardHistory.js" as ClipboardHistory
 
+// cliphist records the history (services.cliphist); this is only the picker.
 Item {
   id: root
 
-  property string omarchyPath: Quickshell.env("OMARCHY_PATH")
   property bool opened: false
   property string filterText: ""
   property int selectedIndex: 0
   property bool cursorActive: false
   property bool clearConfirmOpen: false
+  property bool loaded: false
   property var history: []
+  // The list holds cliphist's one-line previews, so the selected entry is
+  // decoded in full only when it is shown.
+  property string previewId: ""
+  property string previewBody: ""
 
-  property string historyPath: Quickshell.env("HOME") + "/.local/state/omarchy/clipboard-history.json"
-  property string captureScript: root.omarchyPath + "/shell/plugins/clipboard/capture.sh"
+  readonly property string helper: Quickshell.shellDir + "/plugins/clipboard/history.sh"
+  readonly property string cacheDir: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchy-clipboard"
   // Shares the [menu] surface tokens — themes that style the menu also
   // style the clipboard. Selected-row colors composed in the
   // singleton so consumers drop them straight into Rectangle bindings.
@@ -37,7 +42,6 @@ Item {
   property int cardWidth: Math.min(Style.space(875), panel.width - Style.gapsOut * 2)
   property int cardHeight: Math.min(Style.space(600), panel.height - Style.gapsOut * 2)
   property int rowHeight: Math.max(Style.space(50), Style.font.body + Style.font.caption + Style.spacing.rowPaddingX * 2)
-  property int historyLimit: 500
 
   function open(payloadJson) {
     root.opened = true
@@ -46,6 +50,7 @@ Item {
     root.cursorActive = true
     root.disarmPointer()
     root.rebuildDisplay()
+    listProc.running = true
     Qt.callLater(function() { keyCatcher.forceActiveFocus() })
   }
 
@@ -59,34 +64,8 @@ Item {
     else root.open("{}")
   }
 
-  function normalizeEntry(value) {
-    return ClipboardHistory.normalizeEntry(value)
-  }
-
-  function entryKey(entry) {
-    return ClipboardHistory.entryKey(entry)
-  }
-
-  function loadHistory(raw) {
-    root.history = ClipboardHistory.parseHistory(raw)
-    if (root.opened) root.rebuildDisplay()
-  }
-
-  function saveHistory() {
-    historyFile.setText(JSON.stringify(root.history.slice(0, root.historyLimit), null, 2) + "\n")
-  }
-
-  function addClipboardEntry(entry) {
-    var normalized = ClipboardHistory.normalizeEntry(entry)
-    if (!normalized) return
-
-    root.history = ClipboardHistory.addEntry(root.history, normalized, root.historyLimit)
-    root.saveHistory()
-    if (root.opened) root.rebuildDisplay()
-  }
-
-  function addClipboardJson(line) {
-    root.addClipboardEntry(ClipboardHistory.parseEntryJson(line))
+  function runHelper(verb, id) {
+    Quickshell.execDetached(["bash", root.helper, verb, String(id || "")])
   }
 
   function requestClearHistory() {
@@ -102,8 +81,8 @@ Item {
   }
 
   function confirmClearHistory() {
-    root.history = ClipboardHistory.clearHistory()
-    root.saveHistory()
+    root.runHelper("wipe")
+    root.history = []
     root.selectedIndex = 0
     root.cursorActive = false
     root.disarmPointer()
@@ -115,9 +94,9 @@ Item {
   function removeDisplayIndex(index) {
     if (index < 0 || index >= displayModel.count) return
 
-    var row = displayModel.get(index)
-    root.history = ClipboardHistory.removeEntryAt(root.history, row.historyIndex)
-    root.saveHistory()
+    var id = displayModel.get(index).entryId
+    root.runHelper("delete", id)
+    root.history = root.history.filter(function(entry) { return entry.id !== id })
 
     if (displayModel.count <= 1) {
       root.selectedIndex = 0
@@ -137,13 +116,10 @@ Item {
     for (var i = 0; i < rows.length; i++) {
       var row = rows[i]
       displayModel.append({
+        entryId: row.id,
         entryType: row.entryType,
-        fullText: row.fullText,
         previewText: row.previewText,
-        previewImage: row.previewImage ? Util.fileUrl(row.previewImage) : "",
-        path: row.path,
-        mime: row.mime,
-        historyIndex: row.index
+        previewImage: row.previewImage ? Util.fileUrl(row.previewImage) : ""
       })
     }
 
@@ -151,9 +127,26 @@ Item {
     else if (selectedIndex >= displayModel.count) selectedIndex = displayModel.count - 1
     else if (selectedIndex < 0) selectedIndex = 0
 
+    root.loadPreview()
     Qt.callLater(function() {
       if (displayModel.count > 0) resultList.positionViewAtIndex(root.selectedIndex, ListView.Contain)
     })
+  }
+
+  onSelectedIndexChanged: loadPreview()
+
+  function loadPreview() {
+    var row = selectedIndex >= 0 && selectedIndex < displayModel.count ? displayModel.get(selectedIndex) : null
+    var id = row && row.entryType !== "image" ? row.entryId : ""
+    if (id === root.previewId) return
+    root.previewId = id
+    root.previewBody = ""
+    if (id && !previewProc.running) root.startPreview()
+  }
+
+  function startPreview() {
+    previewProc.command = ["bash", root.helper, "preview", root.previewId]
+    previewProc.running = true
   }
 
   function select(delta) {
@@ -196,49 +189,15 @@ Item {
 
   function activateIndex(index) {
     if (index < 0 || index >= displayModel.count) return
-    var row = displayModel.get(index)
-    root.applySelected(row)
+    root.opened = false
+    root.runHelper("paste", displayModel.get(index).entryId)
   }
 
   function copyIndex(index) {
     if (index < 0 || index >= displayModel.count) return
-    var row = displayModel.get(index)
-    root.copySelected(row)
-  }
-
-  function openIndex(index) {
-    if (index < 0 || index >= displayModel.count) return
-    var row = displayModel.get(index)
-    root.openSelected(row)
-  }
-
-  function applySelected(row) {
-    if (!row) return
     root.opened = false
-    if (row.entryType === "image") {
-      Quickshell.execDetached([root.omarchyPath + "/bin/omarchy-clipboard-paste-file", row.mime, row.path])
-    } else if (row.fullText) {
-      Quickshell.execDetached([root.omarchyPath + "/bin/omarchy-clipboard-paste-text", "--shift-insert", "--history-index", String(row.historyIndex)])
-    }
+    root.runHelper("copy", displayModel.get(index).entryId)
   }
-
-  function copySelected(row) {
-    if (!row) return
-    root.opened = false
-    if (row.entryType === "image") {
-      Quickshell.execDetached([root.omarchyPath + "/bin/omarchy-clipboard-paste-file", "--copy-only", row.mime, row.path])
-    } else if (row.fullText) {
-      Quickshell.execDetached([root.omarchyPath + "/bin/omarchy-clipboard-paste-text", "--copy-only", "--history-index", String(row.historyIndex)])
-    }
-  }
-
-  function openSelected(row) {
-    if (!row) return
-    root.opened = false
-    Quickshell.execDetached([root.omarchyPath + "/bin/omarchy-clipboard-open", "--history-index", String(row.historyIndex)])
-  }
-
-  Component.onCompleted: initProc.running = true
 
   ListModel { id: displayModel }
 
@@ -247,67 +206,28 @@ Item {
     referenceItem: card
   }
 
-  FileView {
-    id: historyFile
-    path: root.historyPath
-    watchChanges: true
-    atomicWrites: true
-    printErrors: false
-    onLoaded: root.loadHistory(text())
-    onLoadFailed: root.loadHistory("[]")
-    onFileChanged: reload()
-  }
-
-  // Reap watchers left behind by a previous shell instance, then start our
-  // own. The pdeathsig on the watchers makes the kernel kill them whenever
-  // the shell exits, however it exits, so no further lifecycle management.
   Process {
-    id: initProc
-    command: ["pkill", "-f", "wl-paste .*--watch .*/shell/plugins/clipboard/capture\\.sh"]
-    onExited: {
-      currentProc.running = true
-      textWatchProc.running = true
-      imageWatchProc.running = true
-    }
-  }
-
-  Process {
-    id: currentProc
-    command: [root.captureScript]
+    id: listProc
+    command: ["bash", root.helper, "list"]
     stdout: StdioCollector {
       waitForEnd: true
-      onStreamFinished: root.addClipboardJson(text)
+      onStreamFinished: {
+        root.history = ClipboardHistory.parseList(text, root.cacheDir)
+        if (root.opened) root.rebuildDisplay()
+      }
     }
+    // An empty history prints nothing, and no output means no stream event.
+    onExited: root.loaded = true
   }
 
+  // One decode at a time; a selection that moved on while it ran is fetched
+  // once it exits instead of being shown stale.
   Process {
-    id: textWatchProc
-    command: ["setpriv", "--pdeathsig", "TERM", "wl-paste", "--type", "text", "--watch", root.captureScript, "text"]
-    onExited: watchRestartTimer.restart()
-    stdout: SplitParser {
-      onRead: function(data) { root.addClipboardJson(data) }
-    }
-  }
-
-  Process {
-    id: imageWatchProc
-    command: ["setpriv", "--pdeathsig", "TERM", "wl-paste", "--type", "image/png", "--watch", root.captureScript, "image/png"]
-    onExited: watchRestartTimer.restart()
-    stdout: SplitParser {
-      onRead: function(data) { root.addClipboardJson(data) }
-    }
-  }
-
-  // A watcher that dies takes clipboard history with it, silently: copying still
-  // works, the picker still opens, and the old entries are all still there, so
-  // nothing recorded until the next shell reload. Bring it back instead.
-  Timer {
-    id: watchRestartTimer
-    interval: 1000
-    repeat: false
-    onTriggered: {
-      if (!textWatchProc.running) textWatchProc.running = true
-      if (!imageWatchProc.running) imageWatchProc.running = true
+    id: previewProc
+    stdout: StdioCollector { id: previewOut; waitForEnd: true }
+    onExited: {
+      if (command[3] === root.previewId) root.previewBody = previewOut.text
+      else if (root.previewId) Qt.callLater(root.startPreview)
     }
   }
 
@@ -386,8 +306,7 @@ Item {
             root.selectAbsolute(displayModel.count - 1)
             event.accepted = true
           } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-            if (root.cursorActive && (event.modifiers & Qt.AltModifier)) root.openIndex(root.selectedIndex)
-            else if (root.cursorActive && (event.modifiers & Qt.ShiftModifier)) root.copyIndex(root.selectedIndex)
+            if (root.cursorActive && (event.modifiers & Qt.ShiftModifier)) root.copyIndex(root.selectedIndex)
             else if (root.cursorActive) root.activateIndex(root.selectedIndex)
             else if (displayModel.count > 0) root.cursorActive = true
             event.accepted = true
@@ -471,7 +390,6 @@ Item {
                   required property int index
                   required property string entryType
                   required property string previewText
-                  required property string fullText
                   required property string previewImage
 
                   readonly property bool hasCursor: root.cursorActive && index === root.selectedIndex
@@ -552,7 +470,7 @@ Item {
                 anchors.rightMargin: 0
                 anchors.topMargin: 0
                 anchors.bottomMargin: 0
-                text: parent.activeRow ? parent.activeRow.fullText : ""
+                text: root.previewBody
                 color: root.foreground
                 font.family: root.fontFamily
                 font.pixelSize: Style.font.title
@@ -579,8 +497,9 @@ Item {
 
           Column {
             anchors.centerIn: parent
+            width: parent.width
             spacing: Style.space(8)
-            visible: displayModel.count === 0
+            visible: displayModel.count === 0 && root.loaded
 
             Text {
               text: "󰅌"

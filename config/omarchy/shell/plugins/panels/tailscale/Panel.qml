@@ -297,13 +297,6 @@ Panel {
     scrollCursorIntoView()
   }
 
-  // The file picker takes over from here, so get the panel out of the way.
-  function sendPeerFile(peer) {
-    if (!tailscale.canSendFiles(peer)) return
-    tailscale.sendFile(peer)
-    close()
-  }
-
   function openSelectedPeerCopyMenu() {
     if (!peerColumn || peerIndex < 0 || peerIndex >= peerColumn.children.length) return
     var item = peerColumn.children[peerIndex]
@@ -425,9 +418,7 @@ Panel {
         if (t === "t" || t === "T") tailscale.toggleTailscale()
         else if (t === "c" || t === "C") tailscale.copyPeerIp(root.selectedPeer())
         else if (t === "n" || t === "N") tailscale.copyPeerName(root.selectedPeer())
-        else if (t === "d" || t === "D") tailscale.copyPeerDnsName(root.selectedPeer())
-        else if (t === "s" || t === "S") root.sendPeerFile(root.selectedPeer())
-      }
+        else if (t === "d" || t === "D") tailscale.copyPeerDnsName(root.selectedPeer())      }
 
       Flickable {
         id: panelFlick
@@ -967,17 +958,6 @@ Panel {
           font.pixelSize: Style.font.caption
           elide: Text.ElideRight
         }
-      }
-
-      PanelActionButton {
-        id: sendButton
-        visible: tailscale.canSendFiles(peerRow.peer)
-        iconText: "󰒊"
-        tooltipText: "Send files"
-        foreground: root.foreground
-        fontFamily: root.fontFamily
-        Layout.alignment: Qt.AlignVCenter
-        onClicked: root.sendPeerFile(peerRow.peer)
       }
 
       PanelActionButton {

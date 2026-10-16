@@ -17,6 +17,10 @@
                 --bash <($out/bin/opencode --completions bash) \
                 --zsh <($out/bin/opencode --completions zsh) \
                 --fish <($out/bin/opencode --completions fish)
+
+              # Follow Ghostty's live Omarchy palette even when cli.json selects another theme.
+              wrapProgram $out/bin/opencode \
+                --set OPENCODE_CLI_CONFIG_CONTENT '{"theme":{"name":"system","mode":"system"}}'
             '';
           };
         };

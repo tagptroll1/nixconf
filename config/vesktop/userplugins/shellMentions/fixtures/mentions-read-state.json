@@ -1,0 +1,63 @@
+{
+  "about": "Cached mention set plus Discord read state: badge counts pick the newest unread per channel, snippets resolve tokens",
+  "cases": [
+    {
+      "name": "DM and guild mentions, one acked and one stale channel",
+      "kind": "mentions",
+      "input": {
+        "cache": [
+          { "id": "1099", "channel_id": "10", "origin": "live", "content": "old, already read", "author": { "id": "2" } },
+          { "id": "1101", "channel_id": "10", "origin": "live", "content": "first", "author": { "id": "2" } },
+          { "id": "1102", "channel_id": "10", "origin": "live", "content": "hi <@1>, see <#20>", "author": { "id": "2" } },
+          { "id": "1103", "channel_id": "10", "origin": "live", "content": "<a:wave:555>   again", "author": { "id": "2" } },
+          { "id": "2201", "channel_id": "20", "origin": "server", "content": "<@&7> ping <@3>", "author": { "id": "3" } },
+          { "id": "3301", "channel_id": "30", "origin": "server", "content": "", "attachments": [{}], "author": { "id": "4" } }
+        ],
+        "channels": [
+          { "id": "10", "count": 2, "ack": "1100", "private": true },
+          { "id": "20", "count": 1, "ack": null, "private": false },
+          { "id": "30", "count": 0, "ack": "3300", "private": false }
+        ],
+        "names": {
+          "users": { "1": "Me", "3": "Someone" },
+          "roles": { "7": "mods" },
+          "channels": { "20": "general" }
+        }
+      },
+      "expect": {
+        "total": 3,
+        "picked": ["2201", "1103", "1102"],
+        "keep": ["1102", "1103", "2201"],
+        "refillDms": [],
+        "guildMissing": false,
+        "snippets": ["@mods ping @Someone", ":wave: again", "hi @Me, see #general"]
+      }
+    },
+    {
+      "name": "Snippet fallbacks for unknown names, attachments and long text",
+      "kind": "mentions",
+      "input": {
+        "cache": [
+          { "id": "4401", "channel_id": "40", "origin": "live", "content": "<@9> <@&8> <#99>", "author": { "id": "2" } },
+          { "id": "4402", "channel_id": "40", "origin": "live", "content": "", "attachments": [{}], "author": { "id": "2" } },
+          { "id": "4403", "channel_id": "40", "origin": "live", "content": "", "embeds": [{}], "author": { "id": "2" } },
+          { "id": "4404", "channel_id": "40", "origin": "live", "content": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", "author": { "id": "2" } }
+        ],
+        "channels": [
+          { "id": "40", "count": 4, "ack": null, "private": true }
+        ],
+        "names": { "users": {}, "roles": {}, "channels": {} }
+      },
+      "expect": {
+        "total": 4,
+        "picked": ["4404", "4403", "4402", "4401"],
+        "snippets": [
+          "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx…",
+          "[embed]",
+          "[attachment]",
+          "@user @role #channel"
+        ]
+      }
+    }
+  ]
+}

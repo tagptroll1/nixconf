@@ -1,7 +1,7 @@
 # Everything the vendored omarchy quickshell desktop needs, on both sides:
 # the NixOS module packages its helper CLIs, the home module wires the
 # checkout in config/omarchy into ~/.config. See config/omarchy/README.md.
-{ ... }:
+{ self, ... }:
 let
   # Upstream leaves its whole bin/ on PATH through $OMARCHY_PATH/bin. Only the
   # helpers the shell and the menu actually call are vendored
@@ -27,6 +27,7 @@ let
             gnused
             file
             jq
+            pipewire # pw-dump, for vesktop-in-call
             vips # vipsthumbnail, for the image picker's thumbnails
             util-linux # flock
             procps # pgrep/pkill
@@ -60,6 +61,23 @@ let
           fi
         done
       '';
+
+  # Our fork adds --progress, the live jsonl feed the speed test panel's dials
+  # run on; upstream only prints the result once the test is over.
+  mkSpeedtestGo =
+    pkgs:
+    pkgs.buildGoModule {
+      pname = "speedtest-go";
+      version = "1.8.3-unstable-2026-09-28";
+      src = pkgs.fetchFromGitHub {
+        owner = "tagptroll1";
+        repo = "speedtest-go";
+        rev = "bcd18e72fade33b92a667aa6a5267e589b9f2d72";
+        hash = "sha256-fUUXf09oeI/G3CqZJDUSUAGPqvn0+3upwdD+CwxHIVQ=";
+      };
+      vendorHash = "sha256-n4cF6P/eeQlPd5I6r79XtQnmRWTDvQ/nMEs791D7kn0=";
+      subPackages = [ "." ];
+    };
 in
 {
   flake.nixosModules.omarchy =
@@ -70,6 +88,9 @@ in
       ...
     }:
     {
+      # The network panel draws its connection map from this collector.
+      imports = [ self.nixosModules.networker ];
+
       # The flake output this host is built from. nixos-rebuild defaults it to
       # networking.hostName, which is not the attr name here, so anything that
       # runs a rebuild has to be told: set beside `nixosConfigurations.<name>`.
@@ -81,6 +102,7 @@ in
 
       config.environment.systemPackages = [
         (mkOmarchyBin pkgs)
+        (mkSpeedtestGo pkgs)
         pkgs.wtype
       ];
 
@@ -119,6 +141,10 @@ in
       # config-qs.conf sets this for the quickshell session; set it here too so
       # the helpers also work from a terminal.
       home.sessionVariables.OMARCHY_PATH = "${config.home.homeDirectory}/.config/omarchy";
+
+      # Records the clipboard history the shell's picker reads. Module defaults
+      # already keep images and cap the history at 500 entries.
+      services.cliphist.enable = true;
 
       # ~/.local/state/omarchy/current/{theme,background} is mutable state that
       # omarchy-theme-set owns: it stages the picked theme, renders

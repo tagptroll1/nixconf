@@ -17,6 +17,25 @@
       ghosttyPath = "${config.home.homeDirectory}/nixos-dotfiles/config/ghostty";
       idleInhibitPath = "${config.home.homeDirectory}/nixos-dotfiles/config/wayland-pipewire-idle-inhibit";
       obsProfilesPath = "${config.home.homeDirectory}/nixos-dotfiles/config/obs-studio/profiles";
+
+      # mirrors noise_dirs in config/nvim/init.lua; .git leads because
+      # --walker-skip replaces fzf's default list instead of extending it
+      fzfNoiseDirs = lib.concatStringsSep "," [
+        ".git"
+        "node_modules"
+        "target"
+        "dist"
+        "build"
+        ".svelte-kit"
+        ".next"
+        "zig-out"
+        ".zig-cache"
+        ".godot"
+        ".direnv"
+        ".venv"
+        "__pycache__"
+        ".cache"
+      ];
     in
     {
       imports = [
@@ -38,7 +57,18 @@
       };
       programs.fish = {
         enable = true;
-        shellAliases.cd = "z";
+        shellAliases = {
+          cd = "z";
+          nvims = "nvim $(fzf --walker-skip=${fzfNoiseDirs})";
+          lg = "lazygit";
+          lm = "lazymail";
+        };
+        # TMUX guard keeps shells opened inside tmux from nesting another one
+        interactiveShellInit = ''
+          if not set -q TMUX
+            exec tmux
+          end
+        '';
       };
       programs.zoxide.enable = true;
 

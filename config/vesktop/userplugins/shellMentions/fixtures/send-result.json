@@ -1,0 +1,41 @@
+{
+  "about": "What MessageActions.sendMessage resolves or throws with, and the sent reply the shell gets",
+  "cases": [
+    {
+      "name": "Resolves with an HTTP response",
+      "kind": "sent",
+      "input": { "channelId": "10", "res": { "ok": true, "status": 200, "body": { "id": "1201", "channel_id": "10" } } },
+      "expect": { "type": "sent", "channelId": "10", "ok": true }
+    },
+    {
+      "name": "Resolves with nothing",
+      "kind": "sent",
+      "input": { "channelId": "10", "res": null },
+      "expect": { "type": "sent", "channelId": "10", "ok": true }
+    },
+    {
+      "name": "Resolves with a failed response",
+      "kind": "sent",
+      "input": { "channelId": "20", "res": { "ok": false, "status": 403, "body": { "code": 50013, "message": "Missing Permissions" } } },
+      "expect": { "type": "sent", "channelId": "20", "ok": false, "error": "Missing Permissions" }
+    },
+    {
+      "name": "Throws a REST error",
+      "kind": "sent",
+      "input": { "channelId": "20", "err": { "ok": false, "status": 429, "body": { "message": "You are being rate limited." } } },
+      "expect": { "type": "sent", "channelId": "20", "ok": false, "error": "You are being rate limited." }
+    },
+    {
+      "name": "Throws a plain error",
+      "kind": "sent",
+      "input": { "channelId": "20", "err": { "message": "Network down" } },
+      "expect": { "type": "sent", "channelId": "20", "ok": false, "error": "Network down" }
+    },
+    {
+      "name": "Throws something shapeless",
+      "kind": "sent",
+      "input": { "channelId": "20", "err": null },
+      "expect": { "type": "sent", "channelId": "20", "ok": false, "error": "Send failed" }
+    }
+  ]
+}

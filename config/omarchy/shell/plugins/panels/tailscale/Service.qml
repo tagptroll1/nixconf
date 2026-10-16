@@ -24,8 +24,6 @@ Item {
   property string selfName: ""
   property string selfDnsName: ""
   property string selfIp: ""
-  property string selfUserId: ""
-  property bool fileSharing: false
   property string authUrl: ""
   property var peers: []
   property var exitNodes: []
@@ -133,18 +131,6 @@ Item {
     return ips.length > 0 ? ips[0] : ""
   }
 
-  function canSendFiles(peer) {
-    if (!fileSharing || !running || !peer) return false
-    return Model.isTaildropTarget(peer, selfUserId)
-  }
-
-  function sendFile(peer) {
-    if (!canSendFiles(peer)) return
-    var target = peerAddress(peer)
-    if (target === "") return
-    Quickshell.execDetached(["omarchy-tailscale-send", target])
-  }
-
   function refresh(forceAccounts) {
     if (installed) {
       refreshStatusAndAccounts(forceAccounts === true)
@@ -206,8 +192,6 @@ Item {
     selfName = ""
     selfDnsName = ""
     selfIp = ""
-    selfUserId = ""
-    fileSharing = false
     authUrl = ""
     peers = []
     exitNodes = []
@@ -245,8 +229,6 @@ Item {
     selfName = parsed.selfName
     selfDnsName = parsed.selfDnsName
     selfIp = parsed.selfIp
-    selfUserId = parsed.selfUserId
-    fileSharing = parsed.fileSharing
     peers = parsed.running ? parsed.peers : []
     tailnetExitNodes = parsed.running ? parsed.exitNodes : []
     exitNodes = parsed.running ? tailnetExitNodes.concat(mullvadRegions) : []
@@ -373,7 +355,7 @@ Item {
       _loginUrlOpened = true
       _loginInProgress = false
       loginTimeoutTimer.stop()
-      Quickshell.execDetached(["omarchy-launch-browser", url])
+      Util.execArgv(["xdg-open", url])
       return true
     }
     return false

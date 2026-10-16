@@ -2,3 +2,8 @@
 # It reports as "Chromium", so chromium-browser media also stops inhibiting (acceptable: librewolf is primary).
 [[node_blacklist]]
 app_name = "^Chromium$"
+
+# vesktop keeps its playback stream open after leaving voice. Calls are detected by its mic stream instead.
+[[node_blacklist]]
+app_name = "^vesktop$"
+media_class = "^Stream/Output/Audio$"

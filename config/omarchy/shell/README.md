@@ -31,11 +31,11 @@ shell/
     menu/                the menu: tree, navigation, Packages section
     notifications/       notification server, history, DND
     background/          wallpaper layer
-    clipboard/  emojis/  image-picker/  osd/  polkit/
-    panels/              audio, bluetooth, network, power, monitor, weather,
-                         clock, speedtest, disk-speedtest, …
-    agents/              AI agent usage panel
-    services/            media (MPRIS), nightlight, battery, idle, lock
+    calculator/  clipboard/  emojis/  image-picker/  osd/  polkit/
+    lock/                session lock and its IPC target
+    panels/              audio, bluetooth, network, tailscale, power, monitor,
+                         weather, clock, speedtest, keybindings
+    services/            media (MPRIS), nightlight, idle
     dev-gallery/         component gallery, summoned on demand
 ```
 
@@ -46,14 +46,9 @@ it does not run.
 
 ## What is not wired up
 
-Files kept from upstream that nothing currently mounts, because the helper
-scripts or hardware they need are not here: `plugins/lock/`,
-`plugins/services/idle/`, `plugins/panels/wifiqr/` (needs
-`omarchy-network-qr`), `plugins/panels/tailscale/`,
-`plugins/panels/dropbox/`, `plugins/services/media/BarWidget.qml`, and the
-`widgets/ActiveWindow.qml`, `widgets/Microphone.qml`, `widgets/Spacer.qml` and
-`widgets/SystemUpdate.qml` widgets. They are left in place as starting points,
-not as live code.
+`plugins/services/idle/` is kept from upstream but nothing mounts it. Stay
+Awake runs on the small `idleService` stub in `shell.qml` instead: the bar's
+`IdleInhibitor` follows its flag, and swayidle (started by mango) honors that.
 
 ## IPC contract
 
@@ -74,9 +69,9 @@ individual parts register their own targets (`background`, `image-selector`,
 
 Ids are the addresses used everywhere: `omarchy.menu`, `omarchy.emojis`,
 `omarchy.clipboard`, `omarchy.image-picker`, `omarchy.osd`,
-`omarchy.speedtest`, `omarchy.disk-speedtest`, `omarchy.dev-gallery`, plus the
-bar widgets with popups (`omarchy.audio`, `omarchy.bluetooth`,
-`omarchy.network`, `omarchy.power`, `omarchy.monitor`, `omarchy.clock`,
+`omarchy.calculator`, `omarchy.speedtest`, `omarchy.keybindings`,
+`omarchy.dev-gallery`, plus the bar widgets with popups (`omarchy.audio`,
+`omarchy.bluetooth`, `omarchy.network`, `omarchy.tailscale`, `omarchy.protonvpn`, `omarchy.power`, `omarchy.monitor`, `omarchy.clock`,
 `omarchy.weather`). A bar widget exists once per monitor, so those route to the
 copy on the focused output.
 
@@ -90,6 +85,10 @@ does not start one. Both arguments are required for `toggle` and `summon`, and
 mango's `spawn` runs commands through `wordexp()`, so the JSON payload has to be
 single-quoted in a keybind.
 
+The JSON the shell reads from outside itself (mango clients, docks and
+dispatch replies, the Discord bridge socket, networker's HTTP API, MPRIS
+matching) is in [CONTRACTS.md](CONTRACTS.md).
+
 ## Persisted state
 
 There is no config file. Options are code; only actual state is written, and
@@ -97,12 +96,11 @@ each part owns its own file:
 
 | Path                                                   | Owner         |
 |--------------------------------------------------------|---------------|
-| `~/.local/state/omarchy/clipboard-history.json`        | clipboard     |
+| `~/.cache/cliphist/db`                                 | cliphist (clipboard history) |
 | `~/.local/state/omarchy/notifications{.json,/}`        | notifications |
 | `~/.local/state/omarchy/settings/clock.json`           | calendar popup (week start, life bar) |
 | `~/.local/state/omarchy/settings/tray.json`            | tray pins and hidden icons |
 | `~/.local/state/omarchy/settings/weather.json`         | chosen weather location |
-| `~/.local/state/omarchy/agents/usage/`                 | agents panel  |
 | `~/.local/state/omarchy/current/`                      | current theme and background symlinks |
 
 Theme colors come from the active theme's `colors.toml` / `shell.toml` through
@@ -111,10 +109,11 @@ Theme colors come from the active theme's `colors.toml` / `shell.toml` through
 
 ## Working on it
 
-Quickshell does not hot-reload this config, and nothing respawns it: `qs kill`
-leaves the session with no bar until `quickshell -n -d` is run again (mango only
-starts it at login). `qs ipc show` segfaults on duplicate per-monitor targets —
-read the IPC surface here instead.
+Quickshell 0.3.1 hot-reloads edits to these QML files; `qs log -t 30` shows
+`Reloading configuration...` followed by `Configuration Loaded`. Nothing
+respawns the process after `qs kill`: a manual restart needs `quickshell -n -d`
+(mango only starts it at login). Avoid `qs ipc show` with duplicate per-monitor
+targets; read the IPC surface here instead.
 
 `qmllint` needs the Quickshell import paths in [`.qmlls.ini`](.qmlls.ini). The
 pure-JS parts (`MenuTree.js`, `MenuModel.js`, `NixPackages.js`, `BarModel.js`)

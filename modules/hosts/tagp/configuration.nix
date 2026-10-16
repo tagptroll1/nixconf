@@ -30,7 +30,22 @@ in
       networking.hostName = host;
       networking.networkmanager.enable = true;
 
+      # The bar's Tailscale panel runs the CLI as this user, so it has to be
+      # operator to toggle without root. "client" loosens rp_filter so exit
+      # nodes route.
+      services.tailscale = {
+        enable = true;
+        useRoutingFeatures = "client";
+        extraSetFlags = [ "--operator=tagp" ];
+      };
+
       time.timeZone = "Europe/Oslo";
+
+      # Where the network panel's map draws routes from.
+      services.networker.origin = {
+        latitude = 59.9139;
+        longitude = 10.7522;
+      };
 
       i18n.defaultLocale = "en_US.UTF-8";
       i18n.extraLocaleSettings = {
@@ -127,6 +142,25 @@ in
         # 595.x breaks surface re-registration after S4 resume (session crash);
         # see github.com/NVIDIA/open-gpu-kernel-modules/issues/1136
         package = config.boot.kernelPackages.nvidiaPackages.latest;
+        # Keeps the memory clock floor below while no client holds the GPU.
+        nvidiaPersistenced = true;
+      };
+
+      # Shell power panel switches profiles through it.
+      services.power-profiles-daemon.enable = true;
+
+      # Leaving P8 (405 MHz memory) stalls presentation for ~100 ms, so the first
+      # shell animation after idle stutters. An 810 MHz floor avoids it for ~10 W
+      # idle; the max stays open for games. Re-applied after resume in case S4
+      # resets it.
+      systemd.services.nvidia-memclock-floor = {
+        description = "NVIDIA memory clock floor";
+        wantedBy = [ "multi-user.target" "post-resume.target" ];
+        after = [ "nvidia-persistenced.service" "post-resume.target" ];
+        serviceConfig = {
+          Type = "oneshot";
+          ExecStart = "${config.hardware.nvidia.package.bin}/bin/nvidia-smi -lmc 810,10501";
+        };
       };
 
       nixpkgs.config.allowUnfree = true;

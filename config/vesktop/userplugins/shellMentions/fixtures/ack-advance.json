@@ -1,0 +1,64 @@
+{
+  "about": "MESSAGE_ACK moves a channel's ack past cached messages: they drop out, and a count the cache can no longer fill asks for a refill",
+  "cases": [
+    {
+      "name": "Ack past two of three cached DM messages, badge still says two",
+      "kind": "mentions",
+      "input": {
+        "cache": [
+          { "id": "1101", "channel_id": "10", "origin": "live", "content": "first", "author": { "id": "2" } },
+          { "id": "1102", "channel_id": "10", "origin": "live", "content": "second", "author": { "id": "2" } },
+          { "id": "1103", "channel_id": "10", "origin": "live", "content": "third", "author": { "id": "2" } }
+        ],
+        "channels": [
+          { "id": "10", "count": 2, "ack": "1102", "private": true }
+        ]
+      },
+      "expect": {
+        "total": 2,
+        "picked": ["1103"],
+        "keep": ["1103"],
+        "refillDms": ["10"],
+        "guildMissing": false
+      }
+    },
+    {
+      "name": "Guild channel fully acked, badge cleared",
+      "kind": "mentions",
+      "input": {
+        "cache": [
+          { "id": "2201", "channel_id": "20", "origin": "server", "content": "ping", "author": { "id": "3" } }
+        ],
+        "channels": [
+          { "id": "20", "count": 0, "ack": "2201", "private": false }
+        ]
+      },
+      "expect": {
+        "total": 0,
+        "picked": [],
+        "keep": [],
+        "refillDms": [],
+        "guildMissing": false
+      }
+    },
+    {
+      "name": "Guild ack advanced but badge lags, cache can't fill it",
+      "kind": "mentions",
+      "input": {
+        "cache": [
+          { "id": "2201", "channel_id": "20", "origin": "server", "content": "ping", "author": { "id": "3" } }
+        ],
+        "channels": [
+          { "id": "20", "count": 1, "ack": "2201", "private": false }
+        ]
+      },
+      "expect": {
+        "total": 1,
+        "picked": [],
+        "keep": [],
+        "refillDms": [],
+        "guildMissing": true
+      }
+    }
+  ]
+}

@@ -9,14 +9,22 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # mango upstream plus the stage layout
     mangowm = {
-      url = "github:mangowm/mango";
+      url = "github:tagptroll1/mango";
       inputs.nixpkgs.follows = "nixpkgs";
     };
     # 2.0 is tagged but not yet in nixpkgs or npm latest
     opencode = {
       url = "github:anomalyco/opencode/v2.0.16";
       inputs.nixpkgs.follows = "nixpkgs";
+    };
+
+    # bwrap sandbox builder for modules/apps/freetube.nix
+    nixpak = {
+      url = "github:nixpak/nixpak";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-parts.follows = "flake-parts";
     };
 
     flake-parts.url = "github:hercules-ci/flake-parts";

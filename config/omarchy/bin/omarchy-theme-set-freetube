@@ -1,0 +1,18 @@
+#!/usr/bin/env bash
+
+# omarchy:summary=Retint FreeTube to the current Omarchy theme
+# omarchy:hidden=true
+
+DATA_DIR="$HOME/.config/FreeTube"
+SOURCE="$HOME/.local/state/omarchy/current/theme/freetube.css"
+
+# FreeTube creates its data dir on first run, so its absence means the app
+# isn't in use here. Don't conjure one.
+[[ -d $DATA_DIR ]] || exit 0
+[[ -f $SOURCE ]] || exit 0
+
+# FreeTube watches its data dir and re-inserts omarchy.css on change. Stage
+# under a name it ignores, then rename: atomic, and a single event.
+tmp="$DATA_DIR/.omarchy.css.tmp"
+cp "$SOURCE" "$tmp"
+mv -f "$tmp" "$DATA_DIR/omarchy.css"

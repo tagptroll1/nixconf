@@ -11,16 +11,16 @@ import "plugins/notifications" as NotificationsPlugin
 import "plugins/polkit" as PolkitPlugin
 import "plugins/lock" as LockPlugin
 import "plugins/services/media" as MediaPlugin
+import "plugins/services/discord" as DiscordPlugin
 import "plugins/services/nightlight" as NightlightPlugin
-import "plugins/services/battery" as BatteryPlugin
 import "plugins/menu" as MenuPlugin
 import "plugins/clipboard" as ClipboardPlugin
 import "plugins/emojis" as EmojisPlugin
 import "plugins/calculator" as CalculatorPlugin
 import "plugins/imagepicker" as ImagePickerPlugin
 import "plugins/osd" as OsdPlugin
+import "plugins/stagedock" as StageDockPlugin
 import "plugins/panels/speedtest" as SpeedTestPanel
-import "plugins/panels/diskspeedtest" as DiskSpeedTestPanel
 import "plugins/panels/keybindings" as KeybindingsPanel
 import "plugins/devgallery" as DevGallery
 
@@ -64,25 +64,42 @@ ShellRoot {
     shell: root
   }
 
+  DiscordPlugin.Service {
+    id: discordService
+    shell: root
+  }
+
   NightlightPlugin.Service {
     id: nightlightService
     shell: root
   }
 
-  BatteryPlugin.Service {
-    id: batteryService
-    shell: root
-    omarchyPath: root.omarchyPath
-  }
-
-  QtObject {
+  Item {
     id: idleService
 
     property bool stayAwake: false
+    // A Discord call keeps the machine up even when nothing is typed for the
+    // whole hibernate timeout.
+    property bool inCall: false
+    readonly property bool inhibit: stayAwake || inCall
 
     function setIdleEnabled(enabled) {
       stayAwake = !enabled
       return enabled ? "enabled" : "disabled"
+    }
+
+    Timer {
+      interval: 30000
+      running: true
+      repeat: true
+      triggeredOnStart: true
+      onTriggered: callProbe.running = true
+    }
+
+    Process {
+      id: callProbe
+      command: ["vesktop-in-call"]
+      onExited: function(exitCode) { idleService.inCall = exitCode === 0 }
     }
   }
 
@@ -94,8 +111,8 @@ ShellRoot {
     "omarchy.polkit": polkitService,
     "omarchy.lock": lockService,
     "omarchy.media": mediaService,
+    "omarchy.discord": discordService,
     "omarchy.nightlight": nightlightService,
-    "omarchy.battery": batteryService,
     "omarchy.idle": idleService
   })
 
@@ -113,6 +130,11 @@ ShellRoot {
     shell: root
   }
 
+  // Edge tabs for windows docked by mango's stage layout.
+  StageDockPlugin.StageDock {
+    shell: root
+  }
+
   // ---------------------------------------------------------- overlays
   //
   // Always mounted: each owns state that has to outlive being closed (the
@@ -127,7 +149,6 @@ ShellRoot {
 
   ClipboardPlugin.Clipboard {
     id: clipboardOverlay
-    omarchyPath: root.omarchyPath
   }
 
   EmojisPlugin.Emojis {
@@ -207,13 +228,6 @@ ShellRoot {
   }
 
   OnDemandPanel {
-    id: diskSpeedTestPanel
-    sourceComponent: Component {
-      DiskSpeedTestPanel.Panel { shell: root }
-    }
-  }
-
-  OnDemandPanel {
     id: keybindingsPanel
     sourceComponent: Component {
       KeybindingsPanel.Panel { shell: root }
@@ -239,7 +253,6 @@ ShellRoot {
     "omarchy.image-picker": imagePickerOverlay,
     "omarchy.osd": osdOverlay,
     "omarchy.speedtest": speedTestPanel,
-    "omarchy.disk-speedtest": diskSpeedTestPanel,
     "omarchy.keybindings": keybindingsPanel,
     "omarchy.dev-gallery": devGalleryPanel
   })

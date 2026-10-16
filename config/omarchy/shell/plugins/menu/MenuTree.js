@@ -183,6 +183,14 @@ function tree() {
       label: "Trigger",
       children: [
         {
+          id: "trigger.clipboard",
+          icon: "󰅌",
+          label: "Clipboard",
+          description: "Clipboard history",
+          aliases: ["clipboard", "clip", "history"],
+          action: "summon:omarchy.clipboard"
+        },
+        {
           id: "trigger.emoji",
           icon: "",
           label: "Emoji",

@@ -9,7 +9,7 @@ import Quickshell.Io
 // scale, and bar dimensions.
 //
 // `cornerRadius` mirrors mango's `border_radius`. `gapsOut` is half of
-// mango's `gappoh` — that value works well as a window-to-window gap but
+// mango's `gap_outer_horizontal` — that value works well as a window-to-window gap but
 // feels too cavernous when used as the distance from a panel/notification
 // to the screen edge, so the shell halves it. The user's mango config owns
 // both; the shell re-reads them on startup and after theme IPC applies a
@@ -373,8 +373,8 @@ QtObject {
     // mango's outer gap works as a window-to-window distance but feels
     // cavernous as the distance from a panel to the screen edge, so halve it
     // the same way the shell halved Hyprland's gaps_out.
-    var gap = values["gappoh"] !== undefined ? values["gappoh"]
-            : (values["gappov"] !== undefined ? values["gappov"] : 10)
+    var gap = values["gap_outer_horizontal"] !== undefined ? values["gap_outer_horizontal"]
+            : (values["gap_outer_vertical"] !== undefined ? values["gap_outer_vertical"] : 10)
     gapsOut = Math.max(0, Math.round(gap / 2))
   }
 
@@ -442,7 +442,7 @@ QtObject {
   property Process mangoOptionsProc: Process {
     id: mangoOptionsProc
     command: ["bash", "-c",
-      "grep -hE '^[[:space:]]*(border_radius|gappoh|gappov)[[:space:]]*=' \"$HOME\"/.config/mango/*.conf 2>/dev/null | tr -d '[:blank:]'"]
+      "grep -hE '^[[:space:]]*(border_radius|gap_outer_horizontal|gap_outer_vertical)[[:space:]]*=' \"$HOME\"/.config/mango/*.conf 2>/dev/null | tr -d '[:blank:]'"]
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.applyMangoOptions(text)

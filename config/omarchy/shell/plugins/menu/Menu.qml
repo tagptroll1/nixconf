@@ -372,8 +372,8 @@ Item {
   // ------------------------------------------------------------- packages
   //
   // Install is the one list that cannot be enumerated up front: nixpkgs is too
-  // large to hold, so the typed query goes to `nix search` and the answer
-  // replaces the rows. Everything else in the section reads the repo's own
+  // large to hold, so the typed query goes to a cached dump of it (see
+  // NixPackages.searchScript) and the answer replaces the rows. Everything else in the section reads the repo's own
   // modules/apps directory.
 
   function runSearch() {
@@ -565,6 +565,10 @@ Item {
 
   function loadProviderForMenu(id) {
     var entry = root.item(id)
+    // Entering Install builds the search lists while the query is still being
+    // typed; a revision's first dump is the one slow step. Every entry, not
+    // once, so a rebuild since the last visit is picked up before typing.
+    if (entry && entry.provider === "nix-search" && !prepareProc.running) prepareProc.running = true
     if (!entry || !entry.provider || root.providersLoaded[id]) return
 
     // Native providers don't touch providerProc, so they never need to queue.
@@ -1149,8 +1153,13 @@ Item {
 
   Timer {
     id: searchDebounce
-    interval: 300
+    interval: 150
     onTriggered: root.runSearch()
+  }
+
+  Process {
+    id: prepareProc
+    command: ["bash", "-lc", NixPackages.searchScript(root.repoPath), "bash", ""]
   }
 
   Process {
@@ -1615,7 +1624,11 @@ Item {
             }
 
             Text {
-              text: root.filterText ? "No matches for “" + root.filterText + "”" : "Nothing here yet"
+              // Install's answer is still on its way, not absent: the first
+              // search of a nixpkgs revision waits on its dump.
+              text: root.activeMenu === root.installMenu && (searchProc.running || searchDebounce.running)
+                ? "Searching nixpkgs…"
+                : (root.filterText ? "No matches for “" + root.filterText + "”" : "Nothing here yet")
               color: root.foreground
               opacity: 0.7
               font.family: root.fontFamily

@@ -1,0 +1,63 @@
+{
+  "about": "Guild slots go to mentions Discord's own filter returned before newer live guesses, and a slot only a live guess fills still asks for a refill",
+  "cases": [
+    {
+      "name": "Suppressed @everyone arrives live after a server-confirmed mention, badge says one",
+      "kind": "mentions",
+      "input": {
+        "cache": [
+          { "id": "2201", "channel_id": "20", "origin": "server", "content": "hey <@1>", "author": { "id": "3" } },
+          { "id": "2202", "channel_id": "20", "origin": "live", "content": "@everyone", "mention_everyone": true, "author": { "id": "3" } }
+        ],
+        "channels": [
+          { "id": "20", "count": 1, "ack": null, "private": false }
+        ]
+      },
+      "expect": {
+        "total": 1,
+        "picked": ["2201"],
+        "keep": ["2201"],
+        "refillDms": [],
+        "guildMissing": false
+      }
+    },
+    {
+      "name": "Live mention not yet confirmed shows, and asks the server",
+      "kind": "mentions",
+      "input": {
+        "cache": [
+          { "id": "2201", "channel_id": "20", "origin": "server", "content": "older", "author": { "id": "3" } },
+          { "id": "2202", "channel_id": "20", "origin": "live", "content": "hey <@1>", "author": { "id": "3" } }
+        ],
+        "channels": [
+          { "id": "20", "count": 2, "ack": null, "private": false }
+        ]
+      },
+      "expect": {
+        "total": 2,
+        "picked": ["2202", "2201"],
+        "keep": ["2201", "2202"],
+        "refillDms": [],
+        "guildMissing": true
+      }
+    },
+    {
+      "name": "DMs ignore origin and stay newest first",
+      "kind": "mentions",
+      "input": {
+        "cache": [
+          { "id": "1101", "channel_id": "10", "origin": "server", "content": "fetched", "author": { "id": "2" } },
+          { "id": "1102", "channel_id": "10", "origin": "live", "content": "live", "author": { "id": "2" } }
+        ],
+        "channels": [
+          { "id": "10", "count": 1, "ack": null, "private": true }
+        ]
+      },
+      "expect": {
+        "picked": ["1102"],
+        "refillDms": [],
+        "guildMissing": false
+      }
+    }
+  ]
+}

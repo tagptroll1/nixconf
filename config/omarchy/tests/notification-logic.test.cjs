@@ -55,9 +55,8 @@ test('Lucide tint survives icon persistence and restore without tinting other im
   for (const icon of ['/tmp/photo.png', '/tmp/bell.svg', 'file:///state/images/100-7-appIcon', 'bell']) {
     assert.equal(logic.isLucideIcon(icon), false)
   }
-  assert.match(card, /visible: NotificationLogic.isLucideIcon\(root.smallIconSource\) && smallIconImage.status === Image.Ready/)
-  assert.match(card, /Rectangle \{\s+anchors.fill: parent\s+color: Color.notifications.text/)
-  assert.match(card, /maskEnabled: true\s+maskSource: smallIconImage/)
+  assert.match(card, /layer.enabled: NotificationLogic.isLucideIcon\(root.smallIconSource\)/)
+  assert.match(card, /layer.effect: MultiEffect \{\s+brightness: 1.0\s+colorization: 1.0\s+colorizationColor: Color.notifications.text/)
 })
 
 test('category survives snapshot, persistence, restore and history replay', () => {

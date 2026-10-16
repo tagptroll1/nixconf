@@ -12,6 +12,10 @@
           nodejs
           pnpm
         ];
+        # Nix pnpm can't run the generic-linux pnpm it would download for a pinned packageManager.
+        xdg.configFile."pnpm/config.yaml".text = ''
+          pmOnFail: warn
+        '';
       };
   };
 }

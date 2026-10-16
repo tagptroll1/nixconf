@@ -30,8 +30,7 @@ QtObject {
     return null
   }
 
-  // Tag list for one output, or the focused output's when unnamed. Each entry
-  // is { index, is_active, is_urgent, layout, client_count }.
+  // Tag list for one output, or the focused output's when unnamed; fields in CONTRACTS.md.
   function tagsFor(name) {
     var monitor = monitorFor(name || focusedMonitor)
     return monitor && Array.isArray(monitor.tags) ? monitor.tags : []
