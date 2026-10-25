@@ -30,7 +30,7 @@ Item {
       anchors.centerIn: parent
       text: mediaTab.player && mediaTab.player.isPlaying ? DockModel.glyphs.pause : DockModel.glyphs.play
       color: brand !== "" ? brand
-        : mediaTab.player && mediaTab.player.isPlaying ? Color.accent : Color.popups.text
+        : mediaTab.player && mediaTab.player.isPlaying ? Colors.accent : Colors.popups.text
       font.family: Style.font.family
       font.pixelSize: Style.font.heading
     }
@@ -49,14 +49,14 @@ Item {
       height: width
       anchors.verticalCenter: parent.verticalCenter
       radius: Style.space(8)
-      color: Qt.rgba(Color.popups.text.r, Color.popups.text.g, Color.popups.text.b, 0.08)
+      color: Qt.rgba(Colors.popups.text.r, Colors.popups.text.g, Colors.popups.text.b, 0.08)
       clip: true
 
       Text {
         anchors.centerIn: parent
         visible: cover.status !== Image.Ready
         text: DockModel.glyphs.music
-        color: Color.muted
+        color: Colors.muted
         font.family: Style.font.family
         font.pixelSize: Style.font.display
       }
@@ -80,7 +80,7 @@ Item {
         width: Style.space(20)
         height: width
         radius: width / 2
-        color: Color.popups.background
+        color: Colors.popups.background
 
         Image {
           id: sourceIcon
@@ -103,7 +103,7 @@ Item {
         width: parent.width
         text: mediaTab.player ? (mediaTab.player.trackTitle || mediaTab.title) : ""
         elide: Text.ElideRight
-        color: Color.popups.text
+        color: Colors.popups.text
         font.family: Style.font.family
         font.pixelSize: Style.font.body
         font.bold: true
@@ -114,7 +114,7 @@ Item {
         visible: text !== ""
         text: mediaTab.player ? (mediaTab.player.trackArtist || "") : ""
         elide: Text.ElideRight
-        color: Color.muted
+        color: Colors.muted
         font.family: Style.font.family
         font.pixelSize: Style.font.bodySmall
       }

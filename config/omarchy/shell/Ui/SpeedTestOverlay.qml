@@ -39,10 +39,10 @@ PanelWindow {
 
   // Shares the [menu] surface tokens, so a theme that styles the menu styles
   // this too.
-  readonly property color background: Color.menu.background
-  readonly property color foreground: Color.menu.text
+  readonly property color background: Colors.menu.background
+  readonly property color foreground: Colors.menu.text
   readonly property color foregroundDim: Qt.rgba(foreground.r, foreground.g, foreground.b, 0.55)
-  readonly property var borderSpec: Border.surfaceSpec("menu", "border", Color.menu.border, Math.max(1, Style.space(2)))
+  readonly property var borderSpec: Border.surfaceSpec("menu", "border", Colors.menu.border, Math.max(1, Style.space(2)))
 
   // Outside the config tree, so the hot-reload watcher never sees it.
   readonly property string capturePath: Quickshell.env("XDG_RUNTIME_DIR") + "/omarchy-speedtest.png"
@@ -108,7 +108,7 @@ PanelWindow {
 
   Rectangle {
     anchors.fill: parent
-    color: Color.menu.scrim
+    color: Colors.menu.scrim
   }
 
   MouseArea {
@@ -244,7 +244,7 @@ PanelWindow {
         Text {
           visible: root.failed
           text: root.error
-          color: Color.urgent
+          color: Colors.urgent
           font.family: root.fontFamily
           font.pixelSize: Style.font.bodySmall
           wrapMode: Text.Wrap
@@ -346,7 +346,7 @@ PanelWindow {
       // round caps would leave a stray dot at the foot of the scale.
       ShapePath {
         strokeWidth: dial.arcWidth * 3
-        strokeColor: dial.arcVisible ? Qt.rgba(Color.accent.r, Color.accent.g, Color.accent.b, 0.18) : "transparent"
+        strokeColor: dial.arcVisible ? Qt.rgba(Colors.accent.r, Colors.accent.g, Colors.accent.b, 0.18) : "transparent"
         fillColor: "transparent"
         capStyle: ShapePath.RoundCap
 
@@ -363,7 +363,7 @@ PanelWindow {
       // Value: fills behind the needle.
       ShapePath {
         strokeWidth: dial.arcWidth
-        strokeColor: dial.arcVisible ? Color.accent : "transparent"
+        strokeColor: dial.arcVisible ? Colors.accent : "transparent"
         fillColor: "transparent"
         capStyle: ShapePath.RoundCap
 
@@ -413,8 +413,8 @@ PanelWindow {
         radius: width / 2
 
         gradient: Gradient {
-          GradientStop { position: 0.0; color: Color.accent }
-          GradientStop { position: 0.55; color: Color.accent }
+          GradientStop { position: 0.0; color: Colors.accent }
+          GradientStop { position: 0.55; color: Colors.accent }
           GradientStop { position: 1.0; color: "transparent" }
         }
       }

@@ -22,7 +22,7 @@ BarWidget {
   property bool trayMenuOpen: false
   property var activeTrayItem: null
   property var activeTrayAnchor: null
-  readonly property color foreground: bar ? bar.foreground : Color.foreground
+  readonly property color foreground: bar ? bar.foreground : Colors.foreground
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   // Which icons the user pulled out of the drawer and which they banished:
   // state the tray owns, kept in its own file so a pin survives a restart.
@@ -608,7 +608,7 @@ BarWidget {
     padding: Style.space(8)
     borderSpec: Border.localOrSurfaceSpec("popups", "border",
       Qt.rgba(root.foreground.r, root.foreground.g, root.foreground.b, 0.45),
-      Color.popups.border, Math.max(1, Style.space(2)))
+      Colors.popups.border, Math.max(1, Style.space(2)))
     contentWidth: trayMenuPopup.fittedContentWidth(Style.space(232))
     contentHeight: trayMenuPopup.fittedContentHeight(menuHeaderHeight + trayMenuColumn.implicitHeight)
 
@@ -692,7 +692,7 @@ BarWidget {
             anchors.rightMargin: Style.space(10)
             anchors.verticalCenter: parent.verticalCenter
             height: 1
-            color: Color.popups.border
+            color: Colors.popups.border
             opacity: 0.45
           }
         }
@@ -746,7 +746,7 @@ BarWidget {
                 anchors.rightMargin: Style.space(10)
                 anchors.verticalCenter: parent.verticalCenter
                 height: 1
-                color: Color.popups.border
+                color: Colors.popups.border
                 opacity: 0.45
               }
 

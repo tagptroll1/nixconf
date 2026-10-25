@@ -170,7 +170,7 @@ QtObject {
   property var themeShellValues: ({})
   property var userShellValues: ({})
 
-  // Single TOML walker for shell.toml. Both Color (surface roles) and Style
+  // Single TOML walker for shell.toml. Both Colors (surface roles) and Style
   // (typography, spacing, bar, control states) consume the resulting dict.
   // Accepts quoted strings, bare numeric values, bare width lists, and bare
   // role names; tolerates inline comments. Numbers are kept as strings here —

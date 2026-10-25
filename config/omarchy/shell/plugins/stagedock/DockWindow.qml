@@ -144,8 +144,8 @@ PanelWindow {
     topRightRadius: win.onLeft ? radius2 : 0
     bottomRightRadius: win.onLeft ? radius2 : 0
 
-    color: Color.popups.background
-    border.color: win.preview ? Color.accent : Color.popups.border
+    color: Colors.popups.background
+    border.color: win.preview ? Colors.accent : Colors.popups.border
     border.width: 1
     clip: true
     opacity: win.preview ? 0.6 : 1
@@ -176,7 +176,7 @@ PanelWindow {
       bottomLeftRadius: parent.bottomLeftRadius
       topRightRadius: parent.topRightRadius
       bottomRightRadius: parent.bottomRightRadius
-      color: Color.popups.text
+      color: Colors.popups.text
       opacity: body.containsMouse ? 0.06 : 0
       Behavior on opacity { NumberAnimation { duration: 120 } }
     }

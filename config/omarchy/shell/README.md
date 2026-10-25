@@ -22,7 +22,7 @@ names every static menu row. Adding something means writing it there.
 ```
 shell/
   shell.qml              the desktop: services, overlays, panels, the bar
-  Commons/               Color, Style, Border, Mango (compositor IPC), Util
+  Commons/               Colors, Style, Border, Mango (compositor IPC), Util
   Ui/                    shared widgets: BarWidget, Panel, PopupCard, …
   services/
     AppLibrary.qml       desktop entries, icons, launching, uninstalling
@@ -104,7 +104,7 @@ each part owns its own file:
 | `~/.local/state/omarchy/current/`                      | current theme and background symlinks |
 
 Theme colors come from the active theme's `colors.toml` / `shell.toml` through
-`Commons/Color.qml`, pushed in live by `omarchy-theme-set` over
+`Commons/Colors.qml`, pushed in live by `omarchy-theme-set` over
 `shell applyTheme`.
 
 ## Working on it

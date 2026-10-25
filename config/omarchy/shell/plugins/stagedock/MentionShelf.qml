@@ -25,7 +25,7 @@ Column {
       height: Style.space(44)
       radius: Style.space(8)
       color: mentionArea.containsMouse
-        ? Qt.rgba(Color.popups.text.r, Color.popups.text.g, Color.popups.text.b, 0.08)
+        ? Qt.rgba(Colors.popups.text.r, Colors.popups.text.g, Colors.popups.text.b, 0.08)
         : "transparent"
 
       ClippingRectangle {
@@ -35,13 +35,13 @@ Column {
         width: Style.space(28)
         height: width
         radius: width / 2
-        color: Qt.rgba(Color.popups.text.r, Color.popups.text.g, Color.popups.text.b, 0.1)
+        color: Qt.rgba(Colors.popups.text.r, Colors.popups.text.g, Colors.popups.text.b, 0.1)
 
         Text {
           anchors.centerIn: parent
           visible: avatarImage.status !== Image.Ready
           text: String(mention.modelData.author || "?").charAt(0).toUpperCase()
-          color: Color.popups.text
+          color: Colors.popups.text
           font.family: Style.font.family
           font.pixelSize: Style.font.body
           font.bold: true
@@ -74,7 +74,7 @@ Column {
             width: Math.min(implicitWidth, parent.width / 2)
             text: mention.modelData.author || ""
             elide: Text.ElideRight
-            color: mentionArea.containsMouse ? Color.accent : Color.popups.text
+            color: mentionArea.containsMouse ? Colors.accent : Colors.popups.text
             font.family: Style.font.family
             font.pixelSize: Style.font.bodySmall
             font.bold: true
@@ -85,7 +85,7 @@ Column {
             anchors.baseline: author.baseline
             text: mention.modelData.where || ""
             elide: Text.ElideRight
-            color: Color.muted
+            color: Colors.muted
             font.family: Style.font.family
             font.pixelSize: Style.font.caption
           }
@@ -97,7 +97,7 @@ Column {
           elide: Text.ElideRight
           maximumLineCount: 1
           textFormat: Text.PlainText
-          color: Color.popups.text
+          color: Colors.popups.text
           font.family: Style.font.family
           font.pixelSize: Style.font.bodySmall
         }
@@ -118,7 +118,7 @@ Column {
     visible: shelf.total > 3
     x: Style.space(6)
     text: "+" + (shelf.total - 3) + " more"
-    color: Color.muted
+    color: Colors.muted
     font.family: Style.font.family
     font.pixelSize: Style.font.caption
   }

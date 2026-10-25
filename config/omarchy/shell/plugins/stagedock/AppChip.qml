@@ -38,12 +38,12 @@ Row {
       visible: appIcon.status !== Image.Ready
       anchors.fill: parent
       radius: width / 2
-      color: Qt.rgba(Color.popups.text.r, Color.popups.text.g, Color.popups.text.b, 0.1)
+      color: Qt.rgba(Colors.popups.text.r, Colors.popups.text.g, Colors.popups.text.b, 0.1)
 
       Text {
         anchors.centerIn: parent
         text: chip.dock ? String(chip.dock.appid || chip.dock.title || "?").charAt(0).toUpperCase() : ""
-        color: Color.popups.text
+        color: Colors.popups.text
         font.family: Style.font.family
         font.pixelSize: Style.font.body
         font.bold: true
@@ -60,13 +60,13 @@ Row {
       height: Style.space(14)
       width: Math.max(height, badgeText.implicitWidth + Style.space(6))
       radius: height / 2
-      color: Color.urgent
+      color: Colors.urgent
 
       Text {
         id: badgeText
         anchors.centerIn: parent
         text: chip.mentionTotal > 99 ? "99+" : String(chip.mentionTotal)
-        color: Color.background
+        color: Colors.background
         font.family: Style.font.family
         font.pixelSize: Style.font.caption
         font.bold: true
@@ -80,7 +80,7 @@ Row {
     anchors.verticalCenter: parent.verticalCenter
     text: chip.label
     elide: Text.ElideRight
-    color: chip.opensChat && chipHover.hovered ? Color.accent : Color.popups.text
+    color: chip.opensChat && chipHover.hovered ? Colors.accent : Colors.popups.text
     font.family: Style.font.family
     font.pixelSize: Style.font.body
   }

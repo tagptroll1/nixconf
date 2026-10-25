@@ -44,7 +44,7 @@ Row {
       width: Math.min(implicitWidth, Style.space(180))
       text: peek.label
       elide: Text.ElideRight
-      color: titleArea.containsMouse ? Color.accent : Color.popups.text
+      color: titleArea.containsMouse ? Colors.accent : Colors.popups.text
       font.family: Style.font.family
       font.pixelSize: Style.font.body
 
@@ -79,13 +79,13 @@ Row {
         width: parent.width
         height: Style.space(3)
         radius: height / 2
-        color: Qt.rgba(Color.popups.text.r, Color.popups.text.g, Color.popups.text.b, 0.15)
+        color: Qt.rgba(Colors.popups.text.r, Colors.popups.text.g, Colors.popups.text.b, 0.15)
 
         Rectangle {
           width: seek.visible ? parent.width * Math.min(1, peek.player.position / seek.length) : 0
           height: parent.height
           radius: parent.radius
-          color: Color.accent
+          color: Colors.accent
         }
       }
 

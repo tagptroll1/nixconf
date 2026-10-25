@@ -39,11 +39,11 @@ Item {
   // Resolves through fontconfig at paint time, so changing the system
   // monospace font updates the bar without a reload.
   property string fontFamily: Style.font.family
-  // Bound to the central Color singleton, which tracks the theme's shell.toml.
-  property color foreground: Color.bar.text
+  // Bound to the central Colors singleton, which tracks the theme's shell.toml.
+  property color foreground: Colors.bar.text
   property color barForeground: foreground
-  property color background: Color.bar.background
-  property color urgent: Color.bar.active
+  property color background: Colors.bar.background
+  property color urgent: Colors.bar.active
 
   Behavior on barForeground { ColorAnimation { duration: 420; easing.type: Easing.InOutCubic } }
   Behavior on background { ColorAnimation { duration: 420; easing.type: Easing.InOutCubic } }
@@ -538,15 +538,15 @@ Item {
         id: tooltipBubble
         implicitWidth: tooltipLabel.implicitWidth + 20
         implicitHeight: tooltipLabel.implicitHeight + 14
-        color: Color.tooltip.background
-        borderSpec: Border.surfaceSpec("tooltip", "border", Color.tooltip.border, 1)
+        color: Colors.tooltip.background
+        borderSpec: Border.surfaceSpec("tooltip", "border", Colors.tooltip.border, 1)
         radius: Style.cornerRadius
 
         Text {
           id: tooltipLabel
           anchors.centerIn: parent
           text: root.tooltipText
-          color: Color.tooltip.text
+          color: Colors.tooltip.text
           font.family: root.fontFamily
           font.pixelSize: Style.font.body
           horizontalAlignment: Text.AlignHCenter
@@ -744,7 +744,7 @@ Item {
 
       visible: opacity > 0
       opacity: slot.panelOpen ? 0.9 : 0
-      color: Color.accent
+      color: Colors.accent
       radius: Math.min(width, height) / 2
       width: slot.panelIndicatorExtent
       height: Style.space(2)

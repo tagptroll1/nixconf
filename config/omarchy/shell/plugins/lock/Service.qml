@@ -232,7 +232,7 @@ Item {
 
     WlSessionLockSurface {
       id: lockSurface
-      color: Color.background
+      color: Colors.background
 
       LockView {
         id: lockView

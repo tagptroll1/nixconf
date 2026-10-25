@@ -6,7 +6,7 @@ Item {
   id: root
 
   property real iconSize: Style.font.icon
-  property color color: Color.foreground
+  property color color: Colors.foreground
   property bool crossed: false
   property bool pulsing: false
 

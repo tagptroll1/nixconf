@@ -10,9 +10,9 @@ Item {
   id: root
 
   property bool active: false
-  property color foreground: Color.foreground
-  property color background: Color.popups.background
-  property color accent: Color.accent
+  property color foreground: Colors.foreground
+  property color background: Colors.popups.background
+  property color accent: Colors.accent
   property string fontFamily: Style.font.family
 
   // networker-live's -listen in modules/features/networker.nix.

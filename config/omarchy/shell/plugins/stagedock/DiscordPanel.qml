@@ -57,7 +57,7 @@ Item {
   implicitHeight: expanded ? view.implicitHeight + Style.space(8) : previewHeight
 
   function tint(alpha) {
-    return Qt.rgba(Color.popups.text.r, Color.popups.text.g, Color.popups.text.b, alpha)
+    return Qt.rgba(Colors.popups.text.r, Colors.popups.text.g, Colors.popups.text.b, alpha)
   }
 
   function load(step) {
@@ -150,7 +150,7 @@ Item {
         visible: glyph.icon !== ""
         anchors.verticalCenter: parent.verticalCenter
         text: glyph.icon
-        color: glyphArea.containsMouse ? Color.accent : Color.popups.text
+        color: glyphArea.containsMouse ? Colors.accent : Colors.popups.text
         font.family: Style.font.family
         font.pixelSize: Style.font.body
       }
@@ -158,7 +158,7 @@ Item {
         visible: glyph.label !== ""
         anchors.verticalCenter: parent.verticalCenter
         text: glyph.label
-        color: glyphArea.containsMouse ? Color.accent : Color.popups.text
+        color: glyphArea.containsMouse ? Colors.accent : Colors.popups.text
         font.family: Style.font.family
         font.pixelSize: Style.font.bodySmall
         font.bold: true
@@ -187,7 +187,7 @@ Item {
       anchors.centerIn: parent
       visible: avatarImage.status !== Image.Ready
       text: String(avatar.name || "?").replace(/^#/, "").charAt(0).toUpperCase()
-      color: Color.popups.text
+      color: Colors.popups.text
       font.family: Style.font.family
       font.pixelSize: Style.font.bodySmall
       font.bold: true
@@ -233,8 +233,8 @@ Item {
       text: entry.modelData.name || ""
       elide: Text.ElideRight
       textFormat: Text.PlainText
-      color: entryArea.containsMouse ? Color.accent
-        : entry.modelData.unread || entry.modelData.mentions ? Color.popups.text : Color.muted
+      color: entryArea.containsMouse ? Colors.accent
+        : entry.modelData.unread || entry.modelData.mentions ? Colors.popups.text : Colors.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.bodySmall
       font.bold: !!(entry.modelData.unread || entry.modelData.mentions)
@@ -249,14 +249,14 @@ Item {
       height: entry.modelData.mentions > 0 ? Style.space(14) : Style.space(6)
       width: entry.modelData.mentions > 0 ? Math.max(height, count.implicitWidth + Style.space(6)) : height
       radius: height / 2
-      color: entry.modelData.mentions > 0 ? Color.urgent : Color.popups.text
+      color: entry.modelData.mentions > 0 ? Colors.urgent : Colors.popups.text
 
       Text {
         id: count
         anchors.centerIn: parent
         visible: entry.modelData.mentions > 0
         text: entry.modelData.mentions > 99 ? "99+" : String(entry.modelData.mentions)
-        color: Color.background
+        color: Colors.background
         font.family: Style.font.family
         font.pixelSize: Style.font.caption
         font.bold: true
@@ -314,7 +314,7 @@ Item {
           text: message.modelData.author || ""
           elide: Text.ElideRight
           textFormat: Text.PlainText
-          color: message.clickable && messageArea.containsMouse ? Color.accent : Color.popups.text
+          color: message.clickable && messageArea.containsMouse ? Colors.accent : Colors.popups.text
           font.family: Style.font.family
           font.pixelSize: Style.font.bodySmall
           font.bold: true
@@ -326,7 +326,7 @@ Item {
           text: message.where
           elide: Text.ElideRight
           textFormat: Text.PlainText
-          color: Color.muted
+          color: Colors.muted
           font.family: Style.font.family
           font.pixelSize: Style.font.caption
         }
@@ -339,7 +339,7 @@ Item {
         elide: Text.ElideRight
         maximumLineCount: 2
         textFormat: Text.PlainText
-        color: Color.popups.text
+        color: Colors.popups.text
         font.family: Style.font.family
         font.pixelSize: Style.font.bodySmall
       }
@@ -379,7 +379,7 @@ Item {
       text: root.title
       elide: Text.ElideRight
       textFormat: Text.PlainText
-      color: Color.popups.text
+      color: Colors.popups.text
       font.family: Style.font.family
       font.pixelSize: Style.font.body
       font.bold: true
@@ -422,7 +422,7 @@ Item {
       text: root.blocked
       wrapMode: Text.Wrap
       textFormat: Text.PlainText
-      color: Color.muted
+      color: Colors.muted
       font.family: Style.font.family
       font.pixelSize: Style.font.bodySmall
     }
@@ -449,7 +449,7 @@ Item {
         height: root.rowHeight
         verticalAlignment: Text.AlignVCenter
         text: "No unread mentions"
-        color: Color.muted
+        color: Colors.muted
         font.family: Style.font.family
         font.pixelSize: Style.font.bodySmall
       }
@@ -507,7 +507,7 @@ Item {
             : root.service.chatStatus === "ready" ? "No messages yet" : "Loading…"
           elide: Text.ElideRight
           textFormat: Text.PlainText
-          color: Color.muted
+          color: Colors.muted
           font.family: Style.font.family
           font.pixelSize: Style.font.bodySmall
         }
@@ -530,7 +530,7 @@ Item {
         text: root.service.sendError
         wrapMode: Text.Wrap
         textFormat: Text.PlainText
-        color: Color.urgent
+        color: Colors.urgent
         font.family: Style.font.family
         font.pixelSize: Style.font.caption
       }
@@ -545,7 +545,7 @@ Item {
         rightPadding: sendButton.width + Style.space(4)
         verticalAlignment: TextInput.AlignVCenter
         placeholderText: "Message " + (root.service.chat ? root.service.chat.title : "")
-        foreground: Color.popups.text
+        foreground: Colors.popups.text
         font.pixelSize: Style.font.bodySmall
         onAccepted: root.submit()
         Keys.onEscapePressed: input.focus = false

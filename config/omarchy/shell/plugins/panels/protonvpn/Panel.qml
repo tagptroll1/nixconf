@@ -18,14 +18,14 @@ Panel {
   property int serverIndex: 0
   property bool cursorActive: false
 
-  readonly property color foreground: bar ? bar.foreground : Color.foreground
-  readonly property color urgent: bar ? bar.urgent : Color.urgent
+  readonly property color foreground: bar ? bar.foreground : Colors.foreground
+  readonly property color urgent: bar ? bar.urgent : Colors.urgent
   readonly property color dim: Qt.darker(foreground, 1.55)
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property color iconColor: vpn.active ? foreground : dim
   readonly property color barIconColor: vpn.active ? barForeground : Qt.darker(barForeground, 1.55)
-  readonly property color hoverFill: bar ? Style.hoverFillFor(bar.foreground, Color.accent) : "transparent"
-  readonly property color selectedFill: bar ? Style.selectedFillFor(bar.foreground, Color.accent) : "transparent"
+  readonly property color hoverFill: bar ? Style.hoverFillFor(bar.foreground, Colors.accent) : "transparent"
+  readonly property color selectedFill: bar ? Style.selectedFillFor(bar.foreground, Colors.accent) : "transparent"
   readonly property bool hasProfiles: vpn.profiles.length > 0
   readonly property string toggleHint: vpn.active ? "Disconnect" : (vpn.fallback ? "Connect to " + vpn.fallback.name : "")
 

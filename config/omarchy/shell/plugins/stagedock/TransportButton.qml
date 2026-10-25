@@ -14,7 +14,7 @@ Rectangle {
   height: width
   radius: width / 2
   color: button.containsMouse
-    ? Qt.rgba(Color.popups.text.r, Color.popups.text.g, Color.popups.text.b, 0.1)
+    ? Qt.rgba(Colors.popups.text.r, Colors.popups.text.g, Colors.popups.text.b, 0.1)
     : "transparent"
 
   Text {
@@ -24,7 +24,7 @@ Rectangle {
       : transport.player && transport.player.isPlaying ? DockModel.glyphs.pause
       : DockModel.glyphs.play
     color: transport.action === "playPause" && transport.player && transport.player.isPlaying
-      ? Color.accent : Color.popups.text
+      ? Colors.accent : Colors.popups.text
     font.family: Style.font.family
     font.pixelSize: Style.font.heading
   }

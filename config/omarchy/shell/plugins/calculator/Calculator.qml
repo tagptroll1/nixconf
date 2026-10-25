@@ -45,13 +45,13 @@ Item {
 
   // Shares the [menu] surface tokens, so a theme that styles the menu styles
   // this too.
-  property color background: Color.menu.background
-  property color foreground: Color.menu.text
-  property color border: Color.menu.border
+  property color background: Colors.menu.background
+  property color foreground: Colors.menu.text
+  property color border: Colors.menu.border
   property var borderSpec: Border.surfaceSpec("menu", "border", border, Math.max(1, Style.space(2)))
-  property color scrim: Color.menu.scrim
-  property color accent: Color.menu.selectedText
-  property color rowBackground: Color.menu.selectedBackground
+  property color scrim: Colors.menu.scrim
+  property color accent: Colors.menu.selectedText
+  property color rowBackground: Colors.menu.selectedBackground
   readonly property int cornerRadius: Style.cornerRadius
   property string fontFamily: Style.font.menuFamily
   property int contentMargin: Style.spacing.panelPadding
