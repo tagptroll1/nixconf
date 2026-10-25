@@ -4,6 +4,8 @@ font-family = "Fira Code"
 # The clipboard picker pastes with Shift+Insert; ghostty's default pastes the
 # primary selection there instead.
 keybind = shift+insert=paste_from_clipboard
+# performable passes ctrl+shift+c to tmux when ghostty has no selection of its own
+keybind = performable:ctrl+shift+c=copy_to_clipboard:mixed
 
 # Warm rose-pine overrides — orange/pink lean
 background = 24191c

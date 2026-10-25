@@ -185,8 +185,8 @@ function rebuildJob(nix, pre) {
     // The window is gone by now, so this is the only thing that says the
     // password was taken and the build is on its way.
     + 'send-notification -i hammer "Rebuild started…" '
-    + quote((pre ? "flake update, then " : "") + "nixos-rebuild switch") + '\n'
-    + '{ ' + (pre || "") + 'sudo -S -p "" ' + rebuildCommand(nix) + '; } >"$log" 2>&1\n'
+    + quote((pre ? pre.label + ", then " : "") + "nixos-rebuild switch") + '\n'
+    + '{ ' + (pre ? pre.command + " && " : "") + 'sudo -S -p "" ' + rebuildCommand(nix) + '; } >"$log" 2>&1\n'
     + 'status=$?\n'
     + 'if [[ $status -eq 0 ]]; then\n'
     + '  send-notification -i circle-check "Rebuild complete"\n'
@@ -197,11 +197,25 @@ function rebuildJob(nix, pre) {
 }
 
 function rebuildArgv(nix) {
-  return passwordThenRunArgv(rebuildJob(nix, ""))
+  return passwordThenRunArgv(rebuildJob(nix, null))
 }
 
-function updateArgv(nix) {
-  return passwordThenRunArgv(rebuildJob(nix, "nix flake update && "))
+// No input updates every one. Packages are pinned per input, so one input is
+// the smallest unit that can move: `nixpkgs` bumps every nixpkgs package at once.
+function updateArgv(nix, input) {
+  return passwordThenRunArgv(rebuildJob(nix, input
+    ? { command: "nix flake update " + quote(input), label: "update " + input }
+    : { command: "nix flake update", label: "flake update" }))
+}
+
+// The flake's own inputs from flake.lock, each with the date it is locked at,
+// so the list says how stale each one is before picking it.
+function inputsScript(repo) {
+  return 'jq -r \'.nodes as $n | $n.root.inputs | to_entries[]'
+    + ' | select(.value | type == "string") | $n[.value].locked as $l'
+    + ' | [.key, .key, "", "locked " + (($l.lastModified // 0) | todate[:10])'
+    + ' + (if $l.rev then " · " + $l.rev[:7] else "" end)] | @tsv\' '
+    + quote(repo + "/flake.lock") + '\n'
 }
 
 function configureArgv(nix, file) {

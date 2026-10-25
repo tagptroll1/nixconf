@@ -78,7 +78,32 @@ function tree() {
           icon: "󰚰",
           label: "Update",
           description: "Update the flake inputs and rebuild",
-          action: "nix:update"
+          aliases: ["update", "upgrade"],
+          children: [
+            {
+              id: "packages.update.all",
+              icon: "󰚰",
+              label: "Everything",
+              description: "Update every flake input and rebuild",
+              action: "nix:update"
+            },
+            {
+              id: "packages.update.nixpkgs",
+              icon: "󱄅",
+              label: "Packages (nixpkgs)",
+              description: "Newer versions of every nixpkgs package; other inputs stay pinned",
+              action: "nix:update:nixpkgs"
+            },
+            {
+              // A flake pins packages per input, so one input is the
+              // smallest thing that can be updated on its own.
+              id: "packages.update.input",
+              icon: "󰜷",
+              label: "One input",
+              description: "Pick a single flake input (mango, home-manager, ...)",
+              provider: "nix-inputs"
+            }
+          ]
         },
         {
           id: "packages.rebuild",

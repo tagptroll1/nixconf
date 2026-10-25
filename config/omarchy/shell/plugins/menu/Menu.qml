@@ -318,6 +318,13 @@ Item {
       icon: "\udb80\ude19",
       volatile: true,
       actionFor: function(value) { return "nix:configure:" + value }
+    },
+    // Volatile: each update rewrites the lock dates it shows.
+    "nix-inputs": {
+      script: NixPackages.inputsScript(root.repoPath),
+      icon: "󰜷",
+      volatile: true,
+      actionFor: function(value) { return "nix:update:" + value }
     }
   })
 
@@ -423,7 +430,7 @@ Item {
 
     if (verb === "update") {
       root.cancel()
-      Util.execArgv(NixPackages.updateArgv(root.nixTarget))
+      Util.execArgv(NixPackages.updateArgv(root.nixTarget, rest[0]))
       return
     }
 
