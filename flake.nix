@@ -14,12 +14,6 @@
       url = "github:tagptroll1/mango";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    # 2.0 is tagged but not yet in nixpkgs or npm latest
-    opencode = {
-      url = "github:anomalyco/opencode/v2.0.16";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
     # bwrap sandbox builder for modules/apps/freetube.nix
     nixpak = {
       url = "github:nixpak/nixpak";
