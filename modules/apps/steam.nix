@@ -43,6 +43,32 @@
           enable = true;
           enableWsi = true;
           capSysNice = false;
+          # Steam's LD_LIBRARY_PATH swaps in its runtime's old libSDL2, which the sdl
+          # backend can't start on. DT_RPATH outranks LD_LIBRARY_PATH (RUNPATH doesn't),
+          # so gamescope keeps its own libs while the game still inherits Steam's env.
+          package = pkgs.gamescope.overrideAttrs (old: {
+            postFixup = (old.postFixup or "") + ''
+              bin=$out/bin/.gamescope-wrapped
+              ${pkgs.lib.getExe pkgs.patchelfUnstable} --force-rpath \
+                --set-rpath "$(${pkgs.lib.getExe pkgs.patchelfUnstable} --print-rpath $bin)" $bin
+            '';
+          });
+          # gamescope never gets mango's keymap and falls back to us
+          env = {
+            XKB_DEFAULT_LAYOUT = "no";
+            XKB_DEFAULT_VARIANT = "nodeadkeys";
+          };
+          # sdl: only backend that syncs host clipboard into the game.
+          # output side matches the main monitor; games add only -w/-h
+          args = [
+            "--backend sdl"
+            "-f"
+            "-W 3440"
+            "-H 1440"
+            "-r 240"
+            "-S fit"
+            "--force-grab-cursor"
+          ];
         };
       };
   };
