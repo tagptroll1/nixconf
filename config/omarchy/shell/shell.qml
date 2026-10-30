@@ -19,6 +19,7 @@ import "plugins/emojis" as EmojisPlugin
 import "plugins/calculator" as CalculatorPlugin
 import "plugins/imagepicker" as ImagePickerPlugin
 import "plugins/osd" as OsdPlugin
+import "plugins/micmute" as MicMutePlugin
 import "plugins/stagedock" as StageDockPlugin
 import "plugins/panels/speedtest" as SpeedTestPanel
 import "plugins/panels/keybindings" as KeybindingsPanel
@@ -168,6 +169,8 @@ ShellRoot {
   }
 
   OsdPlugin.Osd { id: osdOverlay }
+
+  MicMutePlugin.MicMute { }
 
   // ----------------------------------------------------- on-demand panels
   //
