@@ -57,6 +57,7 @@
           env = {
             XKB_DEFAULT_LAYOUT = "no";
             XKB_DEFAULT_VARIANT = "nodeadkeys";
+            SDL_VIDEODRIVER = "x11";
           };
           # sdl: only backend that syncs host clipboard into the game.
           # output side matches the main monitor; games add only -w/-h
@@ -70,6 +71,13 @@
             "--force-grab-cursor"
           ];
         };
+
+        # 16:9 on the ultrawide; default -S fit adds the black bars
+        environment.systemPackages = [
+          (pkgs.writeShellScriptBin "gamescope169" ''
+            exec gamescope -w 2560 -h 1440 -- gamemoderun "$@"
+          '')
+        ];
       };
   };
 }

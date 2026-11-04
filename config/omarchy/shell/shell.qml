@@ -13,6 +13,7 @@ import "plugins/lock" as LockPlugin
 import "plugins/services/media" as MediaPlugin
 import "plugins/services/discord" as DiscordPlugin
 import "plugins/services/nightlight" as NightlightPlugin
+import "plugins/services/snitch" as SnitchPlugin
 import "plugins/menu" as MenuPlugin
 import "plugins/clipboard" as ClipboardPlugin
 import "plugins/emojis" as EmojisPlugin
@@ -72,6 +73,10 @@ ShellRoot {
 
   NightlightPlugin.Service {
     id: nightlightService
+    shell: root
+  }
+
+  SnitchPlugin.Service {
     shell: root
   }
 
@@ -299,9 +304,10 @@ ShellRoot {
   }
 
   // Call a method on a mounted panel. Used by helper scripts that want more
-  // than open/close (the menu's refresh, the image picker's ping).
+  // than open/close (the menu's refresh, the image picker's ping). Bar panels
+  // route through the live bar, reaching the copy on the focused output.
   function callPanel(id, method, arg) {
-    var panel = panelFor(id)
+    var panel = panelFor(id) || (bar ? bar.findPanelWidget(id) : null)
     if (!panel) return "unknown"
     var target = panel.onDemand === true ? panel.item : panel
     if (!target || typeof target[method] !== "function") return "unknown"

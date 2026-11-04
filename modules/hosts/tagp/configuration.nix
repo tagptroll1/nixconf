@@ -47,6 +47,16 @@ in
         longitude = 10.7522;
       };
 
+      # Browsers reach new hosts by design, so alerts from them would be noise.
+      services.networker.snitch = {
+        enable = true;
+        watch = [ "freetube" ];
+        quiet = [
+          "librewolf"
+          "chromium"
+        ];
+      };
+
       i18n.defaultLocale = "en_US.UTF-8";
       i18n.extraLocaleSettings = {
         LC_ADDRESS = "nb_NO.UTF-8";

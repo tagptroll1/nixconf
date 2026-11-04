@@ -140,6 +140,22 @@
         "type": "github"
       }
     },
+    "networker": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1793523819,
+        "narHash": "sha256-ZMK4pRLY0k1NM89I1q5nPvyGGwFBX1LGxr3QxFx97tQ=",
+        "owner": "tagptroll1",
+        "repo": "networker",
+        "rev": "13fe468343a6e1e5983d7689f517a579f9aa49c2",
+        "type": "github"
+      },
+      "original": {
+        "owner": "tagptroll1",
+        "repo": "networker",
+        "type": "github"
+      }
+    },
     "nixpak": {
       "inputs": {
         "flake-parts": [
@@ -230,6 +246,7 @@
         "home-manager": "home-manager",
         "import-tree": "import-tree",
         "mangowm": "mangowm",
+        "networker": "networker",
         "nixpak": "nixpak",
         "nixpkgs": "nixpkgs",
         "nixpkgs-xdpw": "nixpkgs-xdpw"

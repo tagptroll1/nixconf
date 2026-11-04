@@ -35,7 +35,7 @@ shell/
     lock/                session lock and its IPC target
     panels/              audio, bluetooth, network, tailscale, power, monitor,
                          weather, clock, speedtest, keybindings
-    services/            media (MPRIS), nightlight, idle
+    services/            media (MPRIS), nightlight, idle, snitch (new-host alerts)
     dev-gallery/         component gallery, summoned on demand
 ```
 

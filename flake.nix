@@ -9,6 +9,11 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    # Collector behind the network panel; see modules/features/networker.nix.
+    networker = {
+      url = "github:tagptroll1/networker";
+      flake = false;
+    };
     # mango upstream plus the stage layout
     mangowm = {
       url = "github:tagptroll1/mango";

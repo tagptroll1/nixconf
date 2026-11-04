@@ -15,7 +15,7 @@ Item {
   property color accent: Colors.accent
   property string fontFamily: Style.font.family
 
-  // networker-live's -listen in modules/features/networker.nix.
+  // services.networker.listen in modules/features/networker.nix.
   readonly property string endpoint: "http://127.0.0.1:8766"
   property var origin: null
   property var routes: []

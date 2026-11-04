@@ -201,6 +201,11 @@ Panel {
     headerIndex = Math.max(0, Math.min(headerActionCount - 1, headerIndex + delta))
   }
 
+  function showSnitchApp(app) {
+    root.open()
+    snitchView.showApp(app)
+  }
+
   function toggleNetwork() {
     if (!networkManagerAvailable) return
     Networking.wifiEnabled = !Networking.wifiEnabled
@@ -1302,6 +1307,14 @@ Panel {
         font.family: root.bar.fontFamily
         font.pixelSize: Style.font.caption
         onLinkActivated: function(link) { Qt.openUrlExternally(link) }
+      }
+
+      SnitchView {
+        id: snitchView
+        width: parent.width
+        active: root.opened
+        foreground: root.bar.foreground
+        fontFamily: root.bar.fontFamily
       }
 
       // Wi-Fi band selection. Only on Wi-Fi, and only when the network answers

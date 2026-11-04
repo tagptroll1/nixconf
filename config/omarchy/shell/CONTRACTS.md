@@ -257,11 +257,12 @@ retries the socket from 2 s, doubling to 30 s.
 
 ## networker
 
-Producer: [`patches/networker-live/cmd/networker-live/main.go`](../../../patches/networker-live/cmd/networker-live/main.go),
-with `Flow` from networker's `internal/tracker` and `Location` from `internal/geo`
-(pinned in [`modules/features/networker.nix`](../../../modules/features/networker.nix)).
-Consumer: [`plugins/panels/network/ConnectionMap.qml`](plugins/panels/network/ConnectionMap.qml)
-and `ConnectionMap.js`.
+Producer: the networker service, with `Flow` from its `internal/tracker` and `Location`
+from `internal/geo`, configured in [`modules/features/networker.nix`](../../../modules/features/networker.nix)
+and pinned by the `networker` flake input. Consumers:
+[`plugins/panels/network/ConnectionMap.qml`](plugins/panels/network/ConnectionMap.qml) and `ConnectionMap.js`,
+[`plugins/panels/network/SnitchView.qml`](plugins/panels/network/SnitchView.qml) and
+[`plugins/services/snitch/Service.qml`](plugins/services/snitch/Service.qml).
 
 HTTP `GET` on `http://127.0.0.1:8766`, loopback only, JSON bodies.
 
@@ -269,6 +270,7 @@ HTTP `GET` on `http://127.0.0.1:8766`, loopback only, JSON bodies.
 
 `{"origin": {"latitude": <deg>, "longitude": <deg>}}`, or `{"origin": null}` when
 `services.networker.origin` is unset. Null is valid: the map shows no routes.
+Also `router`, `history` and `snitch` booleans; the snitch view hides unless `snitch` is true.
 
 ### `/api/flows`
 
@@ -285,7 +287,7 @@ Array of flows seen in the last 30 s, most recent `last_seen` first.
 | `direction` | `"outbound"` or `"inbound"` | |
 | `status` | `"established"` or `"observed"` | `established` when the kernel reports an outbound connection established |
 | `sent_bytes`, `received_bytes` | int | bytes over the flow's life |
-| `source` | string | always `"host"` here; networker-live collects no router flows, so `device` never appears |
+| `source` | string | always `"host"` here unless `services.networker.router.url` is set; only then does `device` appear |
 | `location` | object or null | null for private, loopback, link-local, multicast or unknown addresses |
 | `domain` | string | outbound only, from observed DNS answers; omitted when unknown |
 
@@ -323,6 +325,19 @@ Sample (`curl http://127.0.0.1:8766/api/flows`, one entry, path shortened):
 ```json
 {"now":1790542528343,"last_poll_ok":1790542527340,"last_error":null,"dns_error":null}
 ```
+
+### `/api/snitch/*`
+
+Only with `services.networker.snitch.enable`. Rules live in that option, so these are read-only.
+
+- `/api/snitch/apps`: `[{app, first_seen, last_seen, destinations, sent_bytes, received_bytes, blocked}]`,
+  most recently active first. `app` is the resolved app (`freetube`, not `electron`).
+- `/api/snitch/apps/{app}`: `[{app, host, ip, first_seen, last_seen, sent_bytes, received_bytes,
+  connections, blocked, rule?}]`. `host` is the DNS name, else the address. `rule` names a matching rule;
+  it refuses only when enforcing.
+- `/api/snitch/alerts?after=<seq>`: `{seq, alerts: [{seq, at, app, host, blocked}]}`. `seq` restarts with
+  the service, so a client ahead of it starts over from 0.
+- `/api/snitch/rules`: `{enforcing, rules: [{app, host?, cidr?}]}`.
 
 ### Freshness rule
 
