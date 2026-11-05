@@ -224,6 +224,22 @@
         "type": "github"
       }
     },
+    "nixpkgs-proton": {
+      "locked": {
+        "lastModified": 1793886476,
+        "narHash": "sha256-eJOKc/C7A3Dcf63RLoDQ86EGCX5vLS47FrdGNnAXyKs=",
+        "owner": "NixOS",
+        "repo": "nixpkgs",
+        "rev": "d9324a5a553c6fdc126c07a9344209972145d665",
+        "type": "github"
+      },
+      "original": {
+        "owner": "NixOS",
+        "ref": "master",
+        "repo": "nixpkgs",
+        "type": "github"
+      }
+    },
     "nixpkgs-xdpw": {
       "locked": {
         "lastModified": 1751274312,
@@ -249,7 +265,9 @@
         "networker": "networker",
         "nixpak": "nixpak",
         "nixpkgs": "nixpkgs",
-        "nixpkgs-xdpw": "nixpkgs-xdpw"
+        "nixpkgs-proton": "nixpkgs-proton",
+        "nixpkgs-xdpw": "nixpkgs-xdpw",
+        "wowup-cf-appimage": "wowup-cf-appimage"
       }
     },
     "scenefx": {
@@ -288,6 +306,18 @@
         "owner": "nix-systems",
         "repo": "default-linux",
         "type": "github"
+      }
+    },
+    "wowup-cf-appimage": {
+      "flake": false,
+      "locked": {
+        "narHash": "sha256-IRGz8GNc2muaniW0YL6TtJ6VNHg6i8PU3H5hFX9A0rk=",
+        "type": "file",
+        "url": "https://github.com/WowUp/WowUp.CF/releases/download/v2.25.4/WowUp-CF-2.25.4.AppImage"
+      },
+      "original": {
+        "type": "file",
+        "url": "https://github.com/WowUp/WowUp.CF/releases/download/v2.25.4/WowUp-CF-2.25.4.AppImage"
       }
     }
   },

@@ -181,6 +181,11 @@ in
           xdg-desktop-portal-wlr =
             inputs.nixpkgs-xdpw.legacyPackages.${prev.stdenv.hostPlatform.system}.xdg-desktop-portal-wlr;
         })
+        # Build plumbing for modules/apps/steam.nix and modules/apps/lutris.nix.
+        (final: prev: {
+          proton-ge-bin =
+            inputs.nixpkgs-proton.legacyPackages.${prev.stdenv.hostPlatform.system}.proton-ge-bin;
+        })
         # mopidy: bump core + extensions to mopidy 4 stable (see modules/overlays/mopidy.nix).
         # Build plumbing for modules/apps/mopidy.nix - an overlay is not a home option.
         self.overlays.mopidy

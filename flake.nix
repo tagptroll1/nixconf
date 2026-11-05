@@ -5,6 +5,14 @@
     # only for xdg-desktop-portal-wlr 0.7.1: 0.8.x ext_image_copy_capture path breaks
     # screencast on mango+nvidia (frozen first frame); drop when fixed upstream
     nixpkgs-xdpw.url = "github:NixOS/nixpkgs/nixos-24.11";
+    # only for proton-ge-bin: bump it alone, ahead of nixos-unstable, with
+    # `nix flake update nixpkgs-proton`
+    nixpkgs-proton.url = "github:NixOS/nixpkgs/master";
+    # only for modules/apps/wowup-cf.nix: nixpkgs lags the release; drop when it catches up
+    wowup-cf-appimage = {
+      url = "file+https://github.com/WowUp/WowUp.CF/releases/download/v2.25.4/WowUp-CF-2.25.4.AppImage";
+      flake = false;
+    };
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
