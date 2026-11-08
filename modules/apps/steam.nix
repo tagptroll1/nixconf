@@ -46,20 +46,30 @@
           # Steam's LD_LIBRARY_PATH swaps in its runtime's old libSDL2, which the sdl
           # backend can't start on. DT_RPATH outranks LD_LIBRARY_PATH (RUNPATH doesn't),
           # so gamescope keeps its own libs while the game still inherits Steam's env.
-          package = pkgs.gamescope.overrideAttrs (old: {
-            postFixup = (old.postFixup or "") + ''
-              bin=$out/bin/.gamescope-wrapped
-              ${pkgs.lib.getExe pkgs.patchelfUnstable} --force-rpath \
-                --set-rpath "$(${pkgs.lib.getExe pkgs.patchelfUnstable} --print-rpath $bin)" $bin
-            '';
-          });
+          package =
+            (pkgs.gamescope.override {
+              # Gamescope-only SDL3, so the patch doesn't rebuild everything else on SDL
+              SDL2 = pkgs.sdl2-compat.override {
+                sdl3 = pkgs.sdl3.overrideAttrs (old: {
+                  patches = (old.patches or [ ]) ++ [ ../../patches/sdl3-x11-focus-clipboard.patch ];
+                });
+              };
+            }).overrideAttrs
+              (old: {
+                postFixup = (old.postFixup or "") + ''
+                  bin=$out/bin/.gamescope-wrapped
+                  ${pkgs.lib.getExe pkgs.patchelfUnstable} --force-rpath \
+                    --set-rpath "$(${pkgs.lib.getExe pkgs.patchelfUnstable} --print-rpath $bin)" $bin
+                '';
+              });
           # gamescope never gets mango's keymap and falls back to us
           env = {
             XKB_DEFAULT_LAYOUT = "no";
             XKB_DEFAULT_VARIANT = "nodeadkeys";
             SDL_VIDEODRIVER = "x11";
           };
-          # sdl: only backend that syncs host clipboard into the game.
+          # sdl: only backend that syncs host clipboard into the game (needs the SDL3
+          # patch above for copies made outside the game).
           # output side matches the main monitor; games add only -w/-h
           args = [
             "--backend sdl"
